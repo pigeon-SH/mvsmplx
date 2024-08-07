@@ -6,3 +6,7 @@ __pycache__/
 .idea/
 smplx/models/
 vposer/models/snapshots/
+*.png
+*.jpg
+dataset_example/*
+dd/*

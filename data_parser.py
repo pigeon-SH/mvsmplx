@@ -165,6 +165,8 @@ class OpenPose(Dataset):
         self.img_paths = sorted(self.img_paths)
         self.cnt = 0
 
+        self.cam_param = np.load("/home/vclab/dataset/Hi4D/talk/talk01/cameras/rgb_cameras.npz")
+
     def get_model2data(self):
         return smpl_to_openpose(self.model_type, use_hands=self.use_hands,
                                 use_face=self.use_face,
@@ -227,22 +229,34 @@ class OpenPose(Dataset):
                 output_dict['gender_pd'] = keyp_tuple.gender_pd
         
         # read camera
-        cam_id = int(img_fn)
-        cam_data = sio.loadmat(self.cam_fpath)['cam'][0]
-        cam_param = cam_data[cam_id]
-        cam_R, cam_t = generate_cam_Rt(
-            center=cam_param['center'][0, 0], right=cam_param['right'][0, 0],
-            up=cam_param['up'][0, 0], direction=cam_param['direction'][0, 0])
-        cam_R = cam_R.astype(np.float32)
-        cam_t = cam_t.astype(np.float32)
+        # cam_id = int(img_fn)
+        # cam_data = sio.loadmat(self.cam_fpath)['cam'][0]
+        # cam_param = cam_data[cam_id]
+        # cam_R, cam_t = generate_cam_Rt(
+        #     center=cam_param['center'][0, 0], right=cam_param['right'][0, 0],
+        #     up=cam_param['up'][0, 0], direction=cam_param['direction'][0, 0])
+        # cam_R = cam_R.astype(np.float32)
+        # cam_t = cam_t.astype(np.float32)
         # cam_r = np.float32(cam_data['cam_rs'][cam_id])
         # cam_t = np.float32(cam_data['cam_ts'][cam_id])
         # cam_R = cv2.Rodrigues(cam_r)[0]
+        ##### PIGEONSH
+        cam_id = int(img_path.split('.')[-2].split('_')[-1])
+        cam_idx = np.arange(len(self.cam_param['ids']))[self.cam_param['ids'] == cam_id].item()
+        K = self.cam_param['intrinsics'][cam_idx]
+        RT = self.cam_param['extrinsics'][cam_idx]
+        # self.intrins = torch.tensor([K[0, 0], K[1, 1], self.img_size[0]//2, self.img_size[1]//2], dtype=torch.float32)[None].repeat(self.seq_len, 1)
+        # self.cam_R = torch.tensor(RT[:3, :3], dtype=torch.float32)[None].repeat(self.seq_len, 1, 1)
+        # self.cam_T = torch.tensor(RT[:3, 3], dtype=torch.float32)[None].repeat(self.seq_len, 1)
+        # self.is_static=True
+        # img_w = K[0, 2] * 2
+        # img_h = K[1, 2] * 2
+
         output_dict['cam_id'] = cam_id
-        output_dict['cam_R'] = np.float32(cam_R)
-        output_dict['cam_t'] = np.float32(cam_t)
-        output_dict['cam_fx'] = 5000.0
-        output_dict['cam_fy'] = 5000.0
+        output_dict['cam_R'] = np.float32(RT[:3, :3])
+        output_dict['cam_t'] = np.float32(RT[:3, 3])
+        output_dict['cam_fx'] = K[0, 0]
+        output_dict['cam_fy'] = K[1, 1]
         output_dict['cam_cx'] = img.shape[1] / 2
         output_dict['cam_cy'] = img.shape[0] / 2
 

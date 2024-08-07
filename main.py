@@ -195,7 +195,8 @@ def main(**args):
     keypoints_list = list()
     camera_list = list()
     view_num = len(dataset_obj)
-    view_interval = int(round(view_num / 20.0))
+    # view_interval = int(round(view_num / 20.0))
+    view_interval = 1
 
     for idx, data in enumerate(dataset_obj):
         if idx % view_interval != 0:
