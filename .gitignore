@@ -10,3 +10,4 @@ vposer/models/snapshots/
 *.jpg
 dataset_example/*
 dd/*
+data/*

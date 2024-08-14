@@ -51,7 +51,7 @@ def create_dataset(dataset='openpose', data_folder='data', **kwargs):
 
 
 def read_keypoints(keypoint_fn, use_hands=True, use_face=True,
-                   use_face_contour=False):
+                   use_face_contour=False, human_idx=None):
     with open(keypoint_fn) as keypoint_file:
         data = json.load(keypoint_file)
 
@@ -60,6 +60,8 @@ def read_keypoints(keypoint_fn, use_hands=True, use_face=True,
     gender_pd = []
     gender_gt = []
     for idx, person_data in enumerate(data['people']):
+        if person_data['person_id'] != human_idx:
+            continue
         body_keypoints = np.array(person_data['pose_keypoints_2d'],
                                   dtype=np.float32)
         body_keypoints = body_keypoints.reshape([-1, 3])
@@ -166,6 +168,7 @@ class OpenPose(Dataset):
         self.cnt = 0
 
         self.cam_param = np.load("/home/vclab/dataset/Hi4D/talk/talk01/cameras/rgb_cameras.npz")
+        self.human_idx = kwargs['human_idx']
 
     def get_model2data(self):
         return smpl_to_openpose(self.model_type, use_hands=self.use_hands,
@@ -211,7 +214,7 @@ class OpenPose(Dataset):
                                img_fn + '_keypoints.json')
         keyp_tuple = read_keypoints(keypoint_fn, use_hands=self.use_hands,
                                     use_face=self.use_face,
-                                    use_face_contour=self.use_face_contour)
+                                    use_face_contour=self.use_face_contour, human_idx=self.human_idx)
 
         if len(keyp_tuple.keypoints) < 1:
             return {}
@@ -257,8 +260,8 @@ class OpenPose(Dataset):
         output_dict['cam_t'] = np.float32(RT[:3, 3])
         output_dict['cam_fx'] = K[0, 0]
         output_dict['cam_fy'] = K[1, 1]
-        output_dict['cam_cx'] = img.shape[1] / 2
-        output_dict['cam_cy'] = img.shape[0] / 2
+        output_dict['cam_cx'] = K[0, 2] # img.shape[1] / 2
+        output_dict['cam_cy'] = K[1, 2] # img.shape[0] / 2
 
         return output_dict
 
