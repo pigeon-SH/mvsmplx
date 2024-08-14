@@ -35,30 +35,41 @@ for frame_name in frames:
             intersects.append((rgb == IDENTITY[1]).sum(axis=0)[0])
             intersects.append(len(kpts))
         
-        probs_prod = (probs[0] * probs[3], probs[1] * probs[2])
-        print(intersects, probs, probs_prod)
-        import sys
-        sys.exit(-1)
+        # print(intersects, probs, probs_prod)
 
-        max_prob = max(probs)
-        if len(probs) <= 2:
-            if max_prob == probs[0]:
+        # max_prob = max(probs)
+        # if len(probs) <= 2:
+        #     if max_prob == probs[0]:
+        #         kpts_data['people'][0]['person_id'] = 0
+        #     else:
+        #         kpts_data['people'][0]['person_id'] = 1
+        # else:
+        #     if max_prob == probs[0]:
+        #         kpts_data['people'][0]['person_id'] = 0
+        #         kpts_data['people'][1]['person_id'] = 1
+        #     elif max_prob == probs[1]:
+        #         kpts_data['people'][0]['person_id'] = 1
+        #         kpts_data['people'][1]['person_id'] = 0
+        #     elif max_prob == probs[2]:
+        #         kpts_data['people'][0]['person_id'] = 1
+        #         kpts_data['people'][1]['person_id'] = 0
+        #     elif max_prob == probs[3]:
+        #         kpts_data['people'][0]['person_id'] = 0
+        #         kpts_data['people'][1]['person_id'] = 1
+        if len(probs) > 2:
+            probs_prod = (probs[0] * probs[3], probs[1] * probs[2])
+            if probs_prod[0] > probs_prod[1]:
+                kpts_data['people'][0]['person_id'] = 0
+                kpts_data['people'][1]['person_id'] = 1
+            else:
+                kpts_data['people'][0]['person_id'] = 1
+                kpts_data['people'][1]['person_id'] = 0
+        else:
+            if probs[0] > probs[1]:
                 kpts_data['people'][0]['person_id'] = 0
             else:
                 kpts_data['people'][0]['person_id'] = 1
-        else:
-            if max_prob == probs[0]:
-                kpts_data['people'][0]['person_id'] = 0
-                kpts_data['people'][1]['person_id'] = 1
-            elif max_prob == probs[1]:
-                kpts_data['people'][0]['person_id'] = 1
-                kpts_data['people'][1]['person_id'] = 0
-            elif max_prob == probs[2]:
-                kpts_data['people'][0]['person_id'] = 1
-                kpts_data['people'][1]['person_id'] = 0
-            elif max_prob == probs[3]:
-                kpts_data['people'][0]['person_id'] = 0
-                kpts_data['people'][1]['person_id'] = 1
+
         
         with open(kpts_path, "w") as fp:
             json.dump(kpts_data, fp, indent=4)

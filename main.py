@@ -195,15 +195,12 @@ def main(**args):
     keypoints_list = list()
     camera_list = list()
     view_num = len(dataset_obj)
-    # view_interval = int(round(view_num / 20.0))
-    view_interval = 1
 
     # human_idx = args.get('human_idx')
 
     for idx, data in enumerate(dataset_obj):
-        if idx % view_interval != 0 or len(data) == 0:
+        if len(data) == 0:
             continue
-
         img = data['img']
         fn = data['fn']
         keypoints = data['keypoints'][[0]]
