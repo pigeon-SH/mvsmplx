@@ -40,7 +40,7 @@ ftol: 1e-9
 gtol: 1e-9
 lr: 1.0
 # Max number of optimization iterations
-maxiters: 30
+maxiters: 60
 interactive: True
 visualize: False
 
@@ -66,3 +66,5 @@ shape_weights:
     - 0.5e1
 use_vposer: True
 vposer_ckpt: "./vposer/models"
+
+max_persons: 2

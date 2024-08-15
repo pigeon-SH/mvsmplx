@@ -54,20 +54,6 @@ def main(**args):
     with open(conf_fn, 'w') as conf_file:
         yaml.dump(args, conf_file)
 
-    # result_folder = args.pop('result_folder', 'results')
-    # result_folder = osp.join(output_folder, result_folder)
-    # if not osp.exists(result_folder):
-    #     os.makedirs(result_folder)
-    #
-    # mesh_folder = args.pop('mesh_folder', 'meshes')
-    # mesh_folder = osp.join(output_folder, mesh_folder)
-    # if not osp.exists(mesh_folder):
-    #     os.makedirs(mesh_folder)
-    #
-    # out_img_folder = osp.join(output_folder, 'images')
-    # if not osp.exists(out_img_folder):
-    #     os.makedirs(out_img_folder)
-
     float_dtype = args['float_dtype']
     if float_dtype == 'float64':
         dtype = torch.float64
@@ -89,7 +75,7 @@ def main(**args):
 
     input_gender = args.pop('gender', 'neutral')
     gender_lbl_type = args.pop('gender_lbl_type', 'none')
-    max_persons = args.pop('max_persons', -1)
+    max_persons = args.get('max_persons', -1)
 
     float_dtype = args.get('float_dtype', 'float32')
     if float_dtype == 'float64':
@@ -203,7 +189,7 @@ def main(**args):
             continue
         img = data['img']
         fn = data['fn']
-        keypoints = data['keypoints'][[0]]
+        keypoints = data['keypoints']
         # Create the camera object
         focal_length = args.get('focal_length')
         camera = create_camera(focal_length_x=focal_length,
@@ -246,9 +232,10 @@ def main(**args):
         body_model = female_model
     elif gender == 'male':
         body_model = male_model
+    body_models = [body_model] * max_persons
 
     fit_single_frame(img_list, keypoints_list,
-                     body_model=body_model,
+                     body_models=body_models,
                      camera_list=camera_list,
                      joint_weights=joint_weights,
                      dtype=dtype,

@@ -12,5 +12,6 @@ dataset_example/*
 dd/*
 data/*
 result*
-cuda-samples/*
-torch-mesh-isect/*
+cuda-samples
+torch-mesh-isect
+debug*
