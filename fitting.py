@@ -269,12 +269,15 @@ class FittingMonitor(object):
                                     pose_embedding=pose_embeddings[person_id],
                                     use_vposer=use_vposer,
                                     **kwargs)
+            inter_person_loss_total = 0.
             for i in range(len(camera_list)):
                 inter_person_loss = inter_person_loss_list[i]
                 if inter_person_loss is None:
                     continue
-                # total_loss += 0.01 * inter_person_loss(body_model_outputs, camera_list[i], 
-                #                                 global_body_translations, body_model_scale, faces_tensors)
+                inter_person_loss_total += inter_person_loss(body_model_outputs, camera_list[i], 
+                                                global_body_translations, body_model_scale, faces_tensors)
+            print("@@@", inter_person_loss_total)
+            total_loss += inter_person_loss_total
             if backward:
                 total_loss.backward(create_graph=create_graph)
 
@@ -588,5 +591,4 @@ class InterPersonLoss(nn.Module):
             pen_loss = torch.sum(
                 self.coll_loss_weight *
                 self.pen_distance(triangles, collision_idxs))
-
         return pen_loss

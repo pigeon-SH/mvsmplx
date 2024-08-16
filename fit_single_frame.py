@@ -450,6 +450,10 @@ def fit_single_frame(img_list,
                     if loss_list[i][person_id] is None:
                         continue
                     loss_list[i][person_id].reset_loss_weights(curr_weights)
+            for i in range(len(inter_person_loss_list)):
+                    if inter_person_loss_list[i] is None:
+                        continue
+                    inter_person_loss_list[i].reset_loss_weights(curr_weights)
 
             closure = monitor.create_fitting_closure_multiview(
                 body_optimizer, body_models,

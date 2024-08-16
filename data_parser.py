@@ -169,7 +169,7 @@ class OpenPose(Dataset):
                           not img_fn.startswith('.'))]
         self.img_paths = sorted(self.img_paths)
         assert len(self.img_paths) == 8
-        self.img_paths = self.img_paths[::2]    # PIGEONSH: SPARSE VIEW
+        # self.img_paths = self.img_paths[::2]    # PIGEONSH: SPARSE VIEW
         self.cnt = 0
 
         self.cam_param = np.load("/home/vclab/dataset/Hi4D/talk/talk01/cameras/rgb_cameras.npz")
