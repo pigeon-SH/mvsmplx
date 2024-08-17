@@ -635,11 +635,12 @@ class SMPLX(SMPLH):
     which includes joints for the neck, jaw, eyeballs and fingers.
     '''
 
+    NUM_BETAS = 300
     NUM_BODY_JOINTS = SMPLH.NUM_BODY_JOINTS
     NUM_HAND_JOINTS = 15
     NUM_FACE_JOINTS = 3
     NUM_JOINTS = NUM_BODY_JOINTS + 2 * NUM_HAND_JOINTS + NUM_FACE_JOINTS
-    NUM_EXPR_COEFFS = 10
+    NUM_EXPR_COEFFS = 100
     NECK_IDX = 12
 
     def __init__(self, model_path,

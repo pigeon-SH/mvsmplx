@@ -277,6 +277,8 @@ def parse_config(argv=None):
                         help='The tolerance threshold for the function')
     parser.add_argument('--maxiters', type=int, default=100,
                         help='The maximum iterations for the optimization')
+    parser.add_argument('--total_iters', type=int, default=100,
+                        help='The maximum iterations for the optimization')
 
     args = parser.parse_args()
     args_dict = vars(args)

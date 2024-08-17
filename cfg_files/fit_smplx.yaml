@@ -101,3 +101,5 @@ face_joints_weights:
 
 use_vposer: True
 vposer_ckpt: "./vposer/models"
+
+max_persons: 2

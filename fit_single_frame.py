@@ -281,7 +281,7 @@ def fit_single_frame(img_list,
                 for i in range(len(opt_weights_dict['expr_prior_weight'])):
                     opt_weights_dict['expr_prior_weight'][i] *= (view_num / fct)
                 for i in range(len(opt_weights_dict['jaw_prior_weight'])):
-                    opt_weights_dict['jaw_prior_weight'][i] *= (view_num / fct)
+                    opt_weights_dict['jaw_prior_weight'][i] *= int(view_num / fct)
 
             if use_hands:
                 opt_weights_dict['hand_weight'] = hand_joints_weights
@@ -451,9 +451,9 @@ def fit_single_frame(img_list,
                         continue
                     loss_list[i][person_id].reset_loss_weights(curr_weights)
             for i in range(len(inter_person_loss_list)):
-                    if inter_person_loss_list[i] is None:
-                        continue
-                    inter_person_loss_list[i].reset_loss_weights(curr_weights)
+                if inter_person_loss_list[i] is None:
+                    continue
+                inter_person_loss_list[i].reset_loss_weights(curr_weights)
 
             closure = monitor.create_fitting_closure_multiview(
                 body_optimizer, body_models,
@@ -521,13 +521,18 @@ def fit_single_frame(img_list,
                 result_person['body_pose'] = body_pose.detach().cpu().numpy()
                 result_person['body_pose_embedding'] = pose_embeddings[person_id].detach().cpu().numpy()
 
-            if result_person['body_pose'].shape[-1] == 69:
+            if model_type == "smpl" and result_person['body_pose'].shape[-1] == 69:
                 body_pose = result_person['body_pose']
                 body_pose = np.reshape(body_pose, (1, 69))
                 body_pose = np.concatenate([result_person['global_orient'], body_pose], axis=1)
                 result_person.update({'body_pose': body_pose})
+            elif model_type == "smplx" and result_person['body_pose'].shape[-1] == 63:
+                body_pose = result_person['body_pose']
+                body_pose = np.reshape(body_pose, (1, 63))
+                body_pose = np.concatenate([result_person['global_orient'], body_pose], axis=1)
+                result_person.update({'body_pose': body_pose})
 
-            assert result_person['body_pose'].shape[-1] == 72
+            # assert result_person['body_pose'].shape[-1] == 72
             results.append({'person_id': person_id,
                             'loss': final_loss_val,
                             'result': result_person})

@@ -21,8 +21,8 @@ num_frame = 130
 frames = list(range(20, 150))
 num_human = 2
 cam_ids = [4, 16, 28, 40, 52, 64, 76, 88]
-keypoint_src_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/dd/output"
-save_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data/Hi4D/talk/talk01"
+keypoint_src_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/dd/output_smplx"
+save_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/talk/talk01"
 
 for frame_name in frames:
     for cam_id in cam_ids:

@@ -255,11 +255,12 @@ class FittingMonitor(object):
                                             return_full_pose=return_full_pose)
                 body_model_outputs.append(body_model_output)
 
+                losses = []
                 for i in range(len(camera_list)):
                     loss = loss_list[i][person_id]
                     if loss is None:
                         continue
-                    total_loss += loss(body_model_output, camera=camera_list[i],
+                    l = loss(body_model_output, camera=camera_list[i],
                                     global_body_translation=global_body_translations[person_id],
                                     body_model_scale=body_model_scale,
                                     gt_joints=gt_joints_list[i][person_id],
@@ -269,6 +270,8 @@ class FittingMonitor(object):
                                     pose_embedding=pose_embeddings[person_id],
                                     use_vposer=use_vposer,
                                     **kwargs)
+                    losses.append(l)
+                    total_loss += l
             inter_person_loss_total = 0.
             for i in range(len(camera_list)):
                 inter_person_loss = inter_person_loss_list[i]
@@ -276,8 +279,9 @@ class FittingMonitor(object):
                     continue
                 inter_person_loss_total += inter_person_loss(body_model_outputs, camera_list[i], 
                                                 global_body_translations, body_model_scale, faces_tensors)
-            print("@@@", inter_person_loss_total)
-            total_loss += inter_person_loss_total
+            # total_loss = total_loss * 0.7 + inter_person_loss_total * 0.3
+            # if inter_person_loss_total > 1000000:
+            #     breakpoint()
             if backward:
                 total_loss.backward(create_graph=create_graph)
 
@@ -473,6 +477,7 @@ class SMPLifyLoss(nn.Module):
                     self.coll_loss_weight *
                     self.pen_distance(triangles, collision_idxs))
 
+        # print(f"JOINT: {joint_loss.item():11.5f} PPRIOR: {pprior_loss.item():11.5f} SHAPE: {shape_loss.item():11.5f} ANGLE: {angle_prior_loss.item():11.5f} PEN: {pen_loss:11.5f}")
         total_loss = (joint_loss + pprior_loss + shape_loss +
                       angle_prior_loss + pen_loss +
                       jaw_prior_loss + expression_loss +

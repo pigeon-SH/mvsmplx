@@ -7,7 +7,7 @@ IDENTITY = [np.array([255, 255, 255]), np.array([125, 125, 125])]
 
 frames = list(range(20, 150))
 cam_ids = [4, 16, 28, 40, 52, 64, 76, 88]
-root = "data/Hi4D/talk/talk01"
+root = "data_smplx/Hi4D/talk/talk01"
 for frame_name in frames:
     for cam_id in cam_ids:
         kpts_path = os.path.join(root, f"{frame_name:06d}", "keypoints", f"{frame_name:06d}_{cam_id:02d}_keypoints.json")
