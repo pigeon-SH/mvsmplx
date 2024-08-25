@@ -42,6 +42,15 @@ from optimizers import optim_factory
 import fitting
 from vposer.model_loader import load_vposer
 
+def render_kpts(mask, kpts):
+    img = mask.copy()
+    color = (0, 0, 255)
+
+    for kpt in kpts:
+        # if kpt[-1] > 0.3:
+        cv2.circle(img, (int(kpt[0]), int(kpt[1])), radius=8, color=color, thickness=-1)
+    cv2.imwrite(f"test_kpts.png", img)
+
 
 def fit_single_frame(img_list,
                      keypoints_list,
@@ -94,6 +103,7 @@ def fit_single_frame(img_list,
                      ign_part_pairs=None,
                      left_shoulder_idx=2,
                      right_shoulder_idx=5,
+                     mask_list=None,
                      **kwargs):
     assert batch_size == 1, 'PyTorch L-BFGS only supports batch_size == 1'
     assert len(img_list) == len(keypoints_list)
@@ -219,6 +229,7 @@ def fit_single_frame(img_list,
             gt_joints = keypoint_data[:, :, :2]
             if use_joints_conf:
                 joints_conf = keypoint_data[:, :, 2].reshape(1, -1)
+                joints_conf[joints_conf < 0.3] = 0.0
 
             # Transfer the data to the correct device
             gt_joints = gt_joints.to(device=device, dtype=dtype)
@@ -466,7 +477,8 @@ def fit_single_frame(img_list,
                 use_vposer=use_vposer, vposer=vposer,
                 pose_embeddings=pose_embeddings,
                 return_verts=True, return_full_pose=True,
-                inter_person_loss_list=inter_person_loss_list)
+                inter_person_loss_list=inter_person_loss_list,
+                mask_list=mask_list)
 
             if interactive:
                 if use_cuda and torch.cuda.is_available():

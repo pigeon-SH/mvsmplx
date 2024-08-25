@@ -180,6 +180,7 @@ def main(**args):
     img_list = list()
     keypoints_list = list()
     camera_list = list()
+    mask_list = list()
     view_num = len(dataset_obj)
 
     # human_idx = args.get('human_idx')
@@ -189,6 +190,7 @@ def main(**args):
             continue
         img = data['img']
         fn = data['fn']
+        mask = data['mask']
         keypoints = data['keypoints']
         # Create the camera object
         focal_length = args.get('focal_length')
@@ -215,10 +217,17 @@ def main(**args):
 
         if use_cuda:
             camera = camera.to(device)
+        
+        for person_id in range(len(keypoints)):
+            kpts = keypoints[person_id]
+            kpts_mask = mask[kpts[:, 1].astype(np.int16), kpts[:, 0].astype(np.int16)]
+            keypoints[person_id][kpts_mask != (person_id + 1)] = 0.
+
 
         img_list.append(img)
         keypoints_list.append(keypoints)
         camera_list.append(camera)
+        mask_list.append(mask)
 
         print('Processing: {}'.format(data['img_path']))
 
@@ -249,6 +258,7 @@ def main(**args):
                      right_hand_prior=right_hand_prior,
                      jaw_prior=jaw_prior,
                      angle_prior=angle_prior,
+                     mask_list=mask_list,
                      **args)
 
     elapsed = time.time() - start
