@@ -42,14 +42,14 @@ from optimizers import optim_factory
 import fitting
 from vposer.model_loader import load_vposer
 
-def render_kpts(mask, kpts):
+def render_kpts(mask, kpts, path="test.png"):
     img = mask.copy()
     color = (0, 0, 255)
 
     for kpt in kpts:
         # if kpt[-1] > 0.3:
         cv2.circle(img, (int(kpt[0]), int(kpt[1])), radius=8, color=color, thickness=-1)
-    cv2.imwrite(f"test_kpts.png", img)
+    cv2.imwrite(path, img)
 
 
 def fit_single_frame(img_list,
@@ -300,7 +300,7 @@ def fit_single_frame(img_list,
                 for i in range(len(opt_weights_dict['hand_prior_weight'])):
                     opt_weights_dict['hand_prior_weight'][i] *= (view_num / fct)
 
-            if interpenetration:
+            if True: # interpenetration:
                 opt_weights_dict['coll_loss_weight'] = coll_loss_weights
                 for i in range(len(opt_weights_dict['coll_loss_weight'])):
                     opt_weights_dict['coll_loss_weight'][i] *= (view_num / fct)
@@ -398,23 +398,23 @@ def fit_single_frame(img_list,
         # If the 2D detections/positions of the shoulder joints are too
         # close the rotate the body by 180 degrees and also fit to that
         # orientation
-        orientations = []
-        for person_id in range(max_persons):
-            if try_both_orient:
-                breakpoint()
-                body_orient = body_models[person_id].global_orient.detach().cpu().numpy()
-                flipped_orient = cv2.Rodrigues(body_orient)[0].dot(
-                    cv2.Rodrigues(np.array([0., np.pi, 0]))[0])
-                flipped_orient = cv2.Rodrigues(flipped_orient)[0].ravel()
+        # orientations = []
+        # for person_id in range(max_persons):
+        #     if try_both_orient:
+        #         breakpoint()
+        #         body_orient = body_models[person_id].global_orient.detach().cpu().numpy()
+        #         flipped_orient = cv2.Rodrigues(body_orient)[0].dot(
+        #             cv2.Rodrigues(np.array([0., np.pi, 0]))[0])
+        #         flipped_orient = cv2.Rodrigues(flipped_orient)[0].ravel()
 
-                flipped_orient = torch.tensor(flipped_orient,
-                                            dtype=dtype,
-                                            device=device).unsqueeze(dim=0)
-                orientation = [body_orient, flipped_orient]
-            else:
-                orientation = [body_models[person_id].global_orient.detach().cpu().numpy()] 
-            assert len(orientation) == 1 # PIGEONSH: try_both_orient is False
-            orientations.append(orientation[0])
+        #         flipped_orient = torch.tensor(flipped_orient,
+        #                                     dtype=dtype,
+        #                                     device=device).unsqueeze(dim=0)
+        #         orientation = [body_orient, flipped_orient]
+        #     else:
+        #         orientation = [body_models[person_id].global_orient] # .detach().cpu().numpy()] 
+        #     assert len(orientation) == 1 # PIGEONSH: try_both_orient is False
+        #     orientations.append(orientation[0])
 
         # store here the final error for both orientations,
         # and pick the orientation resulting in the lowest error
@@ -427,7 +427,7 @@ def fit_single_frame(img_list,
         for opt_idx, curr_weights in enumerate(tqdm(opt_weights, desc='Stage')):
             final_params = []
             for person_id in range(max_persons):
-                new_params = defaultdict(global_orient=orientations[person_id],
+                new_params = defaultdict(# global_orient=orientations[person_id],
                                     body_pose=body_mean_poses[person_id:person_id+1])
                 body_models[person_id].reset_params(**new_params)
                 if use_vposer:
