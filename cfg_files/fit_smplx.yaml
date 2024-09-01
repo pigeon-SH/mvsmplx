@@ -103,3 +103,4 @@ use_vposer: True
 vposer_ckpt: "./vposer/models"
 
 max_persons: 2
+keyp_folder: "keypoints_masked"

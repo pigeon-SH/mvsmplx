@@ -38,9 +38,11 @@ def load_dataset(data_root, cam_path):
     cameras = []
     for cam_id in cam_ids:
         fn = f"{frame_idx:06d}_{cam_id:02d}"
-        kpts_fn = os.path.join(data_root, "keypoints", fn + "_keypoints.json")
-        kpts_tuple = read_keypoints(kpts_fn, max_persons=max_persons)
-        keypoint = kpts_tuple.keypoints
+        # kpts_fn = os.path.join(data_root, "keypoints", fn + "_keypoints.json")
+        # kpts_tuple = read_keypoints(kpts_fn, max_persons=max_persons)
+        # keypoint = kpts_tuple.keypoints
+        kpts_fn = os.path.join(data_root, "keypoints_masked", fn + "_keypoints.npy")
+        keypoint = np.load(kpts_fn)
 
         mask_fn = os.path.join(data_root, "mask_gt", fn + ".png")
         mask = cv2.imread(mask_fn).astype(np.float32)
@@ -127,7 +129,7 @@ def load_body_model(smpl_path=None, vposer_latent_dim=32):
 
 def main():
     data_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/talk/talk01/000140"
-    result_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0901_nointer"
+    result_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0901_nointer_noself_masked"
     cam_path = "/home/vclab/dataset/Hi4D/talk/talk01/cameras/rgb_cameras.npz"
     vposer_path = "./vposer/models"
     
@@ -175,10 +177,10 @@ def main():
                 # joint loss
                 proj_joint = camera(body_model_outputs[person_id].joints + transls[person_id])[0]
                 joints_conf = kpts[person_id][..., -1]
-                joints_conf = torch.where(joints_conf < 0.3, 0., joints_conf)
+                # joints_conf = torch.where(joints_conf < 0.3, 0., joints_conf)
                 joint_diff = robustifier(kpts[person_id][:, :2] - proj_joint)
                 joint_loss = (joint_diff * joint_weights.unsqueeze(-1) * joints_conf.unsqueeze(-1)).mean()
-                loss += joint_loss * 0.01
+                loss += joint_loss
 
                 # prior loss
                 pprior_loss = pose_embeddings[person_id].pow(2).sum()
@@ -227,7 +229,7 @@ def main():
             r_loss_1 = m + pos_dists[1] - neg_dists[0]
             ranking_loss = ranking_loss + r_loss_0 if r_loss_0 > 0 else ranking_loss
             ranking_loss = ranking_loss + r_loss_1 if r_loss_1 > 0 else ranking_loss
-            loss += ranking_loss
+            loss += ranking_loss * 0.1
         
         if loss == 0:
             break
