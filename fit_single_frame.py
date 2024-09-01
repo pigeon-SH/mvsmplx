@@ -103,6 +103,7 @@ def fit_single_frame(img_list,
                      ign_part_pairs=None,
                      left_shoulder_idx=2,
                      right_shoulder_idx=5,
+                     mask_list=None,
                      **kwargs):
     assert batch_size == 1, 'PyTorch L-BFGS only supports batch_size == 1'
     assert len(img_list) == len(keypoints_list)
@@ -211,6 +212,7 @@ def fit_single_frame(img_list,
     joints_conf_list = list()
 
     assert(view_num > 0)
+    inter_person_loss_list = []
     for view_id in range(view_num):
         valid_person_cnt = 0
         loss_list_person = list()
@@ -338,9 +340,14 @@ def fit_single_frame(img_list,
                                     **kwargs)
             loss = loss.to(device=device)
             loss_list_person.append(loss)
+        if valid_person_cnt > 1:
+            inter_person_loss = fitting.InterPersonLoss(search_tree=search_tree, pen_distance=pen_distance)
+        else:
+            inter_person_loss = None
         loss_list.append(loss_list_person)
         gt_joints_list.append(gt_joints_list_person)
         joints_conf_list.append(joints_conf_list_person)
+        inter_person_loss_list.append(inter_person_loss)
 
     body_scale = torch.tensor([1.0], dtype=dtype, device=device,)
                               # requires_grad=True)
@@ -435,6 +442,10 @@ def fit_single_frame(img_list,
                     if loss_list[i][person_id] is None:
                         continue
                     loss_list[i][person_id].reset_loss_weights(curr_weights)
+            for i in range(len(inter_person_loss_list)):
+                if inter_person_loss_list[i] is None:
+                    continue
+                inter_person_loss_list[i].reset_loss_weights(curr_weights)
 
             closure = monitor.create_fitting_closure_multiview(
                 body_optimizer, body_models,
@@ -446,7 +457,9 @@ def fit_single_frame(img_list,
                 loss_list=loss_list, create_graph=body_create_graph,
                 use_vposer=use_vposer, vposer=vposer,
                 pose_embeddings=pose_embeddings,
-                return_verts=True, return_full_pose=True,)
+                return_verts=True, return_full_pose=True,
+                inter_person_loss_list=inter_person_loss_list,
+                mask_list=mask_list)
 
             if interactive:
                 if use_cuda and torch.cuda.is_available():

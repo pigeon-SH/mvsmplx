@@ -28,6 +28,25 @@ def load_prior():
     angle_prior = create_prior(prior_type='angle').to(device=device)
     return body_pose_prior, jaw_prior, expr_prior, left_hand_prior, right_hand_prior, shape_prior, angle_prior
 
+def save_models(body_models, transls):
+    verts_total = []
+    faces_total = []
+    for person_id in range(max_persons):
+        body_model = body_models[person_id].eval()
+        body_model_output = body_model()
+        verts = body_model_output.vertices.cpu().detach().numpy()[0] + transls[person_id].cpu().detach().numpy()
+        faces = body_model.faces
+        mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+        mesh.export(f"test_{person_id}.obj")
+    
+        verts_total.append(verts)
+        faces_total.append(faces + person_id * len(verts))
+    
+    vertices = np.concatenate(verts_total, axis=0)
+    faces = np.concatenate(faces_total, axis=0)
+    out_mesh = trimesh.Trimesh(vertices, faces)
+    out_mesh.export("test_total.obj")
+
 def load_dataset(data_root, cam_path):
     cam_param = np.load(cam_path)
     cam_ids = cam_param['ids']
@@ -83,9 +102,11 @@ def load_body_model(smpl_path=None, vposer_latent_dim=32):
 
     joint_mapper = utils.JointMapper(utils.smpl_to_openpose())
     body_models = []
+    transls = []
+    pose_embeddings = []
     for i in range(max_persons):
         if smpl_path:
-            smpl_param[i]['result']['transl'] = smpl_param[i]['result']['global_body_translation'][None]
+            # smpl_param[i]['result']['transl'] = smpl_param[i]['result']['global_body_translation'][None]
             smpl_param[i]['result']['body_pose'] = smpl_param[i]['result']['body_pose'][:, 3:]
             model_params = dict(model_path="./smplx/models",
                                 joint_mapper=joint_mapper,
@@ -98,13 +119,16 @@ def load_body_model(smpl_path=None, vposer_latent_dim=32):
                                 create_jaw_pose=True,
                                 create_leye_pose=True,
                                 create_reye_pose=True,
-                                create_transl=True,
+                                create_transl=False,
                                 dtype=torch.float32,
                                 model_type='smplx', 
                                 num_pca_comps=12,
                                 **smpl_param[i]['result'])
             body_model = smplx.create(gender="neutral", **model_params).to(device=device)
             body_model.betas.requires_grad_(False)
+            # body_model.global_orient.requires_grad_(False)
+            transls.append(smpl_param[i]['result']['global_body_translation'])
+            pose_embeddings.append(smpl_param[i]['result']['body_pose_embedding'])
         else:
             body_mean_poses = torch.zeros([max_persons, vposer_latent_dim], dtype=torch.float32)
             model_params = dict(model_path="./smplx/models",
@@ -118,14 +142,18 @@ def load_body_model(smpl_path=None, vposer_latent_dim=32):
                                 create_jaw_pose=True,
                                 create_leye_pose=True,
                                 create_reye_pose=True,
-                                create_transl=True,
+                                create_transl=False,
                                 dtype=torch.float32,
                                 model_type='smplx', 
                                 num_pca_comps=12, )
                                 # **smpl_param[i]['result'])
             body_model = smplx.create(gender="neutral", **model_params).to(device=device)
+            transls.append([0, 0, 0])
+            pose_embeddings.append(np.array([0] * vposer_latent_dim))
         body_models.append(body_model)
-    return body_models
+    transls = torch.tensor(transls, dtype=torch.float32, device=device, requires_grad=True)
+    pose_embeddings = torch.tensor(np.stack(pose_embeddings), dtype=torch.float32, device=device, requires_grad=True)
+    return body_models, transls, pose_embeddings
 
 def main():
     data_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/talk/talk01/000140"
@@ -137,22 +165,23 @@ def main():
     robustifier = utils.GMoF(rho=rho)
     smpl_path = os.path.join(result_root, "smpl_param.pkl")
     # smpl_path = None
-    body_models = load_body_model(smpl_path)
+    body_models, transls, pose_embeddings = load_body_model(smpl_path)
     body_model_face = body_models[0].faces
     keypoints, masks, cameras, joint_weights = load_dataset(data_root, cam_path)
-    transls = torch.tensor([[0, 0, 0] for _ in range(max_persons)], dtype=torch.float32, device=device, requires_grad=True)
 
-    # vposer
-    pose_embeddings = torch.zeros([max_persons, 32], dtype=torch.float32, device=device, requires_grad=True)
     # vposer_ckpt = os.path.expandvars(vposer_ckpt)
     vposer, _ = load_vposer(vposer_path, vp_model='snapshot')
     vposer = vposer.to(device=device)
     vposer.eval()
 
+    # orig_verts
+    # for i in range(max_persons):
+
+
     # priors
     body_pose_prior, jaw_prior, expr_prior, left_hand_prior, right_hand_prior, shape_prior, angle_prior = load_prior()
 
-    EPOCHS = 20
+    EPOCHS = 100
     final_params = [pose_embeddings, transls]
     for person_id in range(max_persons):
         body_params = list(body_models[person_id].parameters())
@@ -160,6 +189,26 @@ def main():
     optimizer = torch.optim.Adam(params=final_params, lr=0.01)
     for epoch in range(EPOCHS):
         loss = 0.
+
+        body_model_outputs = []
+        for i in range(max_persons):
+            body_pose = vposer.decode(pose_embeddings[i], output_type='aa').view(1, -1)
+            body_model_outputs.append(body_models[i](body_pose=body_pose, return_full_pose=True))
+        intruder_indices = [0, 1]
+        receiver_indices = [1, 0]
+        verts_colls = []
+        for i in range(max_persons):
+            int_idx = intruder_indices[i]
+            rec_idx = receiver_indices[i]
+            rec_verts = body_model_outputs[rec_idx].vertices[0] + transls[rec_idx][None]
+            int_verts = body_model_outputs[int_idx].vertices[0] + transls[int_idx][None]
+            sdf_f = SDF(rec_verts.cpu().detach().numpy(), body_model_face) # receiver.vertices, receiver.faces)
+            sdf = sdf_f(int_verts.cpu().detach().numpy())
+
+            sdf_mask = sdf > 0 # < 0
+            verts_coll = int_verts[sdf_mask, :]
+            verts_colls.append(verts_coll)
+
         for i in range(len(masks)):
             kpts = keypoints[i]
             mask = masks[i]
@@ -168,11 +217,6 @@ def main():
             camera_mat = transform_mat(camera.rotation, camera.translation.unsqueeze(dim=-1))[0]
             camera_center = torch.inverse(camera_mat)[:3, 3]
 
-            body_model_outputs = []
-            for i in range(max_persons):
-                body_pose = vposer.decode(pose_embeddings[person_id], output_type='aa').view(1, -1)
-                body_model_outputs.append(body_models[i](body_pose=body_pose, return_full_pose=True))
-
             for person_id in range(max_persons):
                 # joint loss
                 proj_joint = camera(body_model_outputs[person_id].joints + transls[person_id])[0]
@@ -180,7 +224,7 @@ def main():
                 # joints_conf = torch.where(joints_conf < 0.3, 0., joints_conf)
                 joint_diff = robustifier(kpts[person_id][:, :2] - proj_joint)
                 joint_loss = (joint_diff * joint_weights.unsqueeze(-1) * joints_conf.unsqueeze(-1)).mean()
-                loss += joint_loss
+                loss += joint_loss * 100
 
                 # prior loss
                 pprior_loss = pose_embeddings[person_id].pow(2).sum()
@@ -195,41 +239,33 @@ def main():
                 
                 loss += prior_loss
 
-            intruder_indices = [0, 1]
-            receiver_indices = [1, 0]
-            verts_colls = []
-            for i in range(max_persons):
-                int_idx = intruder_indices[i]
-                rec_idx = receiver_indices[i]
-                rec_verts = body_model_outputs[rec_idx].vertices[0] + transls[rec_idx][None]
-                int_verts = body_model_outputs[int_idx].vertices[0] + transls[int_idx][None]
-                sdf_f = SDF(rec_verts.cpu().detach().numpy(), body_model_face) # receiver.vertices, receiver.faces)
-                sdf = sdf_f(int_verts.cpu().detach().numpy())
-
-                sdf_mask = sdf > 0 # < 0
-                verts_coll = int_verts[sdf_mask, :]
-                verts_colls.append(verts_coll)
-            
-            pos_dists = []
-            neg_dists = []
+            # pos_dists = []
+            # neg_dists = []
+            ranking_loss = 0.
             for person_id in intruder_indices:
                 verts_proj = camera((verts_colls[person_id] + transls[person_id][None])[None])[0]
                 y_idx = torch.clip(verts_proj[..., 1].int(), 0, mask.shape[0]-1)
                 x_idx = torch.clip(verts_proj[..., 0].int(), 0, mask.shape[1]-1)
                 verts_proj_mask = mask[y_idx, x_idx] == (person_id + 1)
                 verts_proj_mask = verts_proj_mask[..., 0]
-                pos_dist = ((verts_colls[person_id][verts_proj_mask] - camera_center[None]) ** 2).mean()
-                neg_dist = ((verts_colls[person_id][~verts_proj_mask] - camera_center[None]) ** 2).mean()
-                pos_dists.append(pos_dist)
-                neg_dists.append(neg_dist)
+                pos_dist, neg_dist = 0.0, 0.0
+                if verts_proj_mask.isnan().sum() > 0:
+                    breakpoint()
+                if verts_proj_mask.sum() > 0:
+                    pos_dist = ((verts_colls[person_id][verts_proj_mask] - camera_center[None]) ** 2).mean()
+                if (~verts_proj_mask).sum() > 0:
+                    neg_dist = ((verts_colls[person_id][~verts_proj_mask] - camera_center[None]) ** 2).mean()
+                # pos_dists.append(pos_dist)
+                # neg_dists.append(neg_dist)
+                ranking_loss += pos_dist - neg_dist
 
-            m = 1.0
-            ranking_loss = 0.
-            r_loss_0 = m + pos_dists[0] - neg_dists[1]
-            r_loss_1 = m + pos_dists[1] - neg_dists[0]
-            ranking_loss = ranking_loss + r_loss_0 if r_loss_0 > 0 else ranking_loss
-            ranking_loss = ranking_loss + r_loss_1 if r_loss_1 > 0 else ranking_loss
-            loss += ranking_loss * 0.1
+            # m = 0.5
+            # ranking_loss = 0.
+            # r_loss_0 = m + pos_dists[0] - neg_dists[1]
+            # r_loss_1 = m + pos_dists[1] - neg_dists[0]
+            # ranking_loss = ranking_loss + r_loss_0 if r_loss_0 > 0 else ranking_loss
+            # ranking_loss = ranking_loss + r_loss_1 if r_loss_1 > 0 else ranking_loss
+            loss += ranking_loss
         
         if loss == 0:
             break
@@ -237,25 +273,7 @@ def main():
         loss.backward()
         optimizer.step()
         print(f"EPOCH {epoch:02d} LOSS: {loss.item():6.4f} JOINT: {joint_loss.item():6.4f} PRIOR: {prior_loss.item():6.4f} RANKING: {ranking_loss:6.4f}")
-
-
-    verts_total = []
-    faces_total = []
-    for person_id in range(max_persons):
-        body_model = body_models[person_id].eval()
-        body_model_output = body_model()
-        verts = body_model_output.vertices.cpu().detach().numpy()[0] + transls[person_id].cpu().detach().numpy()
-        faces = body_model.faces
-        mesh = trimesh.Trimesh(vertices=verts, faces=faces)
-        mesh.export(f"test_{person_id}.obj")
-    
-        verts_total.append(verts)
-        faces_total.append(faces + person_id * len(verts))
-    
-    vertices = np.concatenate(verts_total, axis=0)
-    faces = np.concatenate(faces_total, axis=0)
-    out_mesh = trimesh.Trimesh(vertices, faces)
-    out_mesh.export("test_total.obj")
+    save_models(body_models, transls)
 
 if __name__ == "__main__":
     main()
