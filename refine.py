@@ -57,7 +57,7 @@ def load_dataset(data_root, cam_path):
         camera.translation.data = torch.from_numpy(RT[:3, 3].astype(np.float32)).unsqueeze(0).to(device=device)
         camera.rotation = camera.rotation.requires_grad_(False)
         camera.translation = camera.translation.requires_grad_(False)
-        
+       
         for person_id in range(max_persons):
             kpts = keypoint[person_id]
             kpts_mask = mask[kpts[:, 1].astype(np.int16), kpts[:, 0].astype(np.int16)]
@@ -127,14 +127,14 @@ def load_body_model(smpl_path=None, vposer_latent_dim=32):
 
 def main():
     data_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/talk/talk01/000140"
-    result_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result_0827_nosinglepene"
+    result_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0901_nointer"
     cam_path = "/home/vclab/dataset/Hi4D/talk/talk01/cameras/rgb_cameras.npz"
     vposer_path = "./vposer/models"
     
     rho = 100
     robustifier = utils.GMoF(rho=rho)
-    # smpl_path = os.path.join(result_root, "smpl_param.pkl")
-    smpl_path = None
+    smpl_path = os.path.join(result_root, "smpl_param.pkl")
+    # smpl_path = None
     body_models = load_body_model(smpl_path)
     body_model_face = body_models[0].faces
     keypoints, masks, cameras, joint_weights = load_dataset(data_root, cam_path)
@@ -150,7 +150,7 @@ def main():
     # priors
     body_pose_prior, jaw_prior, expr_prior, left_hand_prior, right_hand_prior, shape_prior, angle_prior = load_prior()
 
-    EPOCHS = 100
+    EPOCHS = 20
     final_params = [pose_embeddings, transls]
     for person_id in range(max_persons):
         body_params = list(body_models[person_id].parameters())
@@ -237,6 +237,8 @@ def main():
         print(f"EPOCH {epoch:02d} LOSS: {loss.item():6.4f} JOINT: {joint_loss.item():6.4f} PRIOR: {prior_loss.item():6.4f} RANKING: {ranking_loss:6.4f}")
 
 
+    verts_total = []
+    faces_total = []
     for person_id in range(max_persons):
         body_model = body_models[person_id].eval()
         body_model_output = body_model()
@@ -244,6 +246,14 @@ def main():
         faces = body_model.faces
         mesh = trimesh.Trimesh(vertices=verts, faces=faces)
         mesh.export(f"test_{person_id}.obj")
+    
+        verts_total.append(verts)
+        faces_total.append(faces + person_id * len(verts))
+    
+    vertices = np.concatenate(verts_total, axis=0)
+    faces = np.concatenate(faces_total, axis=0)
+    out_mesh = trimesh.Trimesh(vertices, faces)
+    out_mesh.export("test_total.obj")
 
 if __name__ == "__main__":
     main()

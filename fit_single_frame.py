@@ -103,7 +103,6 @@ def fit_single_frame(img_list,
                      ign_part_pairs=None,
                      left_shoulder_idx=2,
                      right_shoulder_idx=5,
-                     mask_list=None,
                      **kwargs):
     assert batch_size == 1, 'PyTorch L-BFGS only supports batch_size == 1'
     assert len(img_list) == len(keypoints_list)
@@ -212,7 +211,6 @@ def fit_single_frame(img_list,
     joints_conf_list = list()
 
     assert(view_num > 0)
-    inter_person_loss_list = []
     for view_id in range(view_num):
         valid_person_cnt = 0
         loss_list_person = list()
@@ -340,33 +338,9 @@ def fit_single_frame(img_list,
                                     **kwargs)
             loss = loss.to(device=device)
             loss_list_person.append(loss)
-        
-        if valid_person_cnt > 1:
-            from mesh_intersection.bvh_search_tree import BVH
-            import mesh_intersection.loss as collisions_loss
-            from mesh_intersection.filter_faces import FilterFaces
-
-            assert use_cuda, 'Interpenetration term can only be used with CUDA'
-            assert torch.cuda.is_available(), \
-                'No CUDA Device! Interpenetration term can only be used' + \
-                ' with CUDA'
-
-            search_tree = BVH(max_collisions=max_collisions)
-
-            pen_distance = \
-                collisions_loss.DistanceFieldPenetrationLoss(
-                    sigma=df_cone_height, point2plane=point2plane,
-                    vectorized=True, penalize_outside=penalize_outside)
-
-            # PIGEONSH: no part_segm_fn
-
-            inter_person_loss = fitting.InterPersonLoss(search_tree=search_tree, pen_distance=pen_distance)
-        else:
-            inter_person_loss = None
         loss_list.append(loss_list_person)
         gt_joints_list.append(gt_joints_list_person)
         joints_conf_list.append(joints_conf_list_person)
-        inter_person_loss_list.append(inter_person_loss)
 
     body_scale = torch.tensor([1.0], dtype=dtype, device=device,)
                               # requires_grad=True)
@@ -461,10 +435,6 @@ def fit_single_frame(img_list,
                     if loss_list[i][person_id] is None:
                         continue
                     loss_list[i][person_id].reset_loss_weights(curr_weights)
-            for i in range(len(inter_person_loss_list)):
-                if inter_person_loss_list[i] is None:
-                    continue
-                inter_person_loss_list[i].reset_loss_weights(curr_weights)
 
             closure = monitor.create_fitting_closure_multiview(
                 body_optimizer, body_models,
@@ -476,9 +446,7 @@ def fit_single_frame(img_list,
                 loss_list=loss_list, create_graph=body_create_graph,
                 use_vposer=use_vposer, vposer=vposer,
                 pose_embeddings=pose_embeddings,
-                return_verts=True, return_full_pose=True,
-                inter_person_loss_list=inter_person_loss_list,
-                mask_list=mask_list)
+                return_verts=True, return_full_pose=True,)
 
             if interactive:
                 if use_cuda and torch.cuda.is_available():
@@ -555,6 +523,8 @@ def fit_single_frame(img_list,
 
     if save_meshes or visualize:
         body_scale = body_scale.detach().cpu().numpy().squeeze()
+        verts_total = []
+        faces_total = []
         for person_id in range(max_persons):
             model_output = body_models[person_id](return_verts=True, body_pose=torch.from_numpy(results[person_id]['result']['body_pose'][:, 3:]).cuda())
             vertices = model_output.vertices.detach().cpu().numpy().squeeze()
@@ -590,3 +560,12 @@ def fit_single_frame(img_list,
             out_mesh = trimesh.Trimesh(vertices * body_scale + global_trans, body_models[person_id].faces)
             save_fn = mesh_fn.replace(".obj", f"_{person_id}.obj")
             out_mesh.export(save_fn)
+
+            verts_total.append(vertices * body_scale + global_trans)
+            faces_total.append(body_models[person_id].faces + person_id * len(vertices))
+        
+        vertices = np.concatenate(verts_total, axis=0)
+        faces = np.concatenate(faces_total, axis=0)
+        out_mesh = trimesh.Trimesh(vertices, faces)
+        save_fn = mesh_fn.replace(".obj", f"_total.obj")
+        out_mesh.export(save_fn)

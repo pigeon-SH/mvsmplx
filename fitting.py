@@ -234,8 +234,6 @@ class FittingMonitor(object):
                                          use_vposer=False, vposer=None,
                                          pose_embeddings=None,
                                          create_graph=False,
-                                         inter_person_loss_list=None,
-                                         mask_list=None,
                                          **kwargs):
         faces_tensors = [body_models[person_id].faces_tensor.view(-1) for person_id in range(len(body_models))]
         append_wrists = self.model_type == 'smpl' and use_vposer
@@ -281,15 +279,6 @@ class FittingMonitor(object):
                                     **kwargs)
                     losses.append(l)
                     total_loss += l
-            inter_person_loss_total = 0.
-            # for i in range(len(camera_list)):
-            #     inter_person_loss = inter_person_loss_list[i]
-            #     if inter_person_loss is None or (inter_person_loss.coll_loss_weight == 0).all():
-            #         continue
-            #     mask = torch.tensor(mask_list[i], device=body_poses[0].device)
-            #     inter_person_loss_total += inter_person_loss(body_models, body_poses, camera_list[i], 
-            #                                     global_body_translations, body_model_scale, faces_tensors[0], mask)
-            total_loss = total_loss + inter_person_loss_total # * 0.115
             if backward:
                 total_loss.backward(create_graph=create_graph)
 
@@ -545,90 +534,3 @@ class SMPLifyCameraInitLoss(nn.Module):
                 camera.translation[:, 2] - self.trans_estimation[:, 2]).pow(2))
 
         return joint_loss + depth_loss
-
-
-class InterPersonLoss(nn.Module):
-
-    def __init__(self, search_tree=None,
-                 pen_distance=None, 
-                 tri_filtering_module=None,
-                 dtype=torch.float32,
-                 coll_loss_weight=0.0,
-                 ):
-
-        super(InterPersonLoss, self).__init__()
-
-        # self.search_tree = search_tree
-        # self.tri_filtering_module = tri_filtering_module
-        # self.pen_distance = pen_distance
-
-        self.register_buffer('coll_loss_weight',
-                            torch.tensor(coll_loss_weight, dtype=dtype))
-
-    def reset_loss_weights(self, loss_weight_dict):
-        for key in loss_weight_dict:
-            if hasattr(self, key):
-                weight_tensor = getattr(self, key)
-                if 'torch.Tensor' in str(type(loss_weight_dict[key])):
-                    weight_tensor = loss_weight_dict[key].clone().detach()
-                else:
-                    weight_tensor = torch.tensor(loss_weight_dict[key],
-                                                 dtype=weight_tensor.dtype,
-                                                 device=weight_tensor.device)
-                setattr(self, key, weight_tensor)
-
-    def forward(self, body_models, body_poses, camera, global_body_translations,
-                body_model_scale, body_model_face, mask):
-
-        camera_mat = transform_mat(camera.rotation, camera.translation.unsqueeze(dim=-1))[0]
-        camera_center = torch.inverse(camera_mat)[:3, 3]
-
-        body_model_outputs = []
-        for person_id in range(len(body_models)):
-            betas = body_models[person_id].betas
-            body_model_output = body_models[person_id](return_verts=True,
-                                                body_pose=body_poses[person_id],
-                                                return_full_pose=False,
-                                                betas=betas.detach())
-            body_model_outputs.append(body_model_output)
-        assert len(body_model_outputs) == 2
-
-        body_model_face = body_model_face.reshape(-1, 3).cpu().detach().numpy()
-        intruder_indices = [0, 1]
-        receiver_indices = [1, 0]
-        verts_colls = []
-        for i in range(2):
-            int_idx = intruder_indices[i]
-            rec_idx = receiver_indices[i]
-            # receiver = trimesh.Trimesh(vertices=body_model_outputs[rec_idx].vertices.cpu().detach().numpy()[0], faces=body_model_face.cpu().detach().numpy())
-            rec_verts = body_model_outputs[rec_idx].vertices[0] + global_body_translations[rec_idx][None]
-            int_verts = body_model_outputs[int_idx].vertices[0] + global_body_translations[int_idx][None]
-            # sdf = mesh_to_sdf.mesh_to_sdf(receiver, int_verts.cpu().detach().numpy(), surface_point_method='scan', sign_method='normal', bounding_radius=None, scan_count=100, scan_resolution=400, sample_point_count=10000000, normal_sample_count=11)
-            sdf_f = SDF(rec_verts.cpu().detach().numpy(), body_model_face) # receiver.vertices, receiver.faces)
-            sdf = sdf_f(int_verts.cpu().detach().numpy())
-
-            sdf_mask = sdf > 0 # < 0
-            verts_coll = int_verts[sdf_mask, :]
-            verts_colls.append(verts_coll)
-        
-        pos_dists = []
-        neg_dists = []
-        for person_id in intruder_indices:
-            verts_proj = camera((body_model_scale * verts_colls[person_id] + global_body_translations[person_id][None])[None])[0]
-            # mask = torch.tensor(mask, device=body_model_face.device)
-            y_idx = torch.clip(verts_proj[..., 1].int(), 0, mask.shape[0]-1)
-            x_idx = torch.clip(verts_proj[..., 0].int(), 0, mask.shape[1]-1)
-            verts_proj_mask = mask[y_idx, x_idx] == (person_id + 1)
-            verts_proj_mask = verts_proj_mask[..., 0]
-            pos_dist = ((verts_colls[person_id][verts_proj_mask] - camera_center[None]) ** 2).mean()
-            neg_dist = ((verts_colls[person_id][~verts_proj_mask] - camera_center[None]) ** 2).mean()
-            pos_dists.append(pos_dist)
-            neg_dists.append(neg_dist)
-
-        m = 1.0
-        ranking_loss = 0.
-        r_loss_0 = m + pos_dists[0] - neg_dists[1]
-        r_loss_1 = m + pos_dists[1] - neg_dists[0]
-        ranking_loss = ranking_loss + r_loss_0 if r_loss_0 > 0 else ranking_loss
-        ranking_loss = ranking_loss + r_loss_1 if r_loss_1 > 0 else ranking_loss
-        return ranking_loss * 100
