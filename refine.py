@@ -125,7 +125,7 @@ def load_body_model(smpl_path=None, vposer_latent_dim=32):
                                 num_pca_comps=12,
                                 **smpl_param[i]['result'])
             body_model = smplx.create(gender="neutral", **model_params).to(device=device)
-            body_model.betas.requires_grad_(False)
+            # body_model.betas.requires_grad_(False)
             # body_model.global_orient.requires_grad_(False)
             transls.append(smpl_param[i]['result']['global_body_translation'])
             pose_embeddings.append(smpl_param[i]['result']['body_pose_embedding'])
@@ -157,7 +157,7 @@ def load_body_model(smpl_path=None, vposer_latent_dim=32):
 
 def main():
     data_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/talk/talk01/000140"
-    result_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0901_nointer_noself_masked"
+    result_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0901_nointer_noself_trimasked"
     cam_path = "/home/vclab/dataset/Hi4D/talk/talk01/cameras/rgb_cameras.npz"
     vposer_path = "./vposer/models"
     
@@ -181,13 +181,13 @@ def main():
     # priors
     body_pose_prior, jaw_prior, expr_prior, left_hand_prior, right_hand_prior, shape_prior, angle_prior = load_prior()
 
-    EPOCHS = 100
+    EPOCHS = 200
     final_params = [pose_embeddings, transls]
     for person_id in range(max_persons):
         body_params = list(body_models[person_id].parameters())
         final_params += list(filter(lambda x: x.requires_grad, body_params))
-    optimizer = torch.optim.Adam(params=final_params, lr=0.01)
-    for epoch in range(EPOCHS):
+    optimizer = torch.optim.Adam(params=final_params, lr=0.1)
+    for epoch in tqdm(range(EPOCHS)):
         loss = 0.
 
         body_model_outputs = []
@@ -208,6 +208,9 @@ def main():
             sdf_mask = sdf > 0 # < 0
             verts_coll = int_verts[sdf_mask, :]
             verts_colls.append(verts_coll)
+        
+        if len(verts_colls[0]) == 0 and len(verts_colls[1]) == 0:
+            break
 
         for i in range(len(masks)):
             kpts = keypoints[i]
@@ -265,14 +268,14 @@ def main():
             # r_loss_1 = m + pos_dists[1] - neg_dists[0]
             # ranking_loss = ranking_loss + r_loss_0 if r_loss_0 > 0 else ranking_loss
             # ranking_loss = ranking_loss + r_loss_1 if r_loss_1 > 0 else ranking_loss
-            loss += ranking_loss
+            loss += ranking_loss * 10
         
         if loss == 0:
             break
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-        print(f"EPOCH {epoch:02d} LOSS: {loss.item():6.4f} JOINT: {joint_loss.item():6.4f} PRIOR: {prior_loss.item():6.4f} RANKING: {ranking_loss:6.4f}")
+        # print(f"EPOCH {epoch:02d} LOSS: {loss.item():6.4f} JOINT: {joint_loss.item():6.4f} PRIOR: {prior_loss.item():6.4f} RANKING: {ranking_loss:6.4f}")
     save_models(body_models, transls)
 
 if __name__ == "__main__":
