@@ -170,11 +170,11 @@ class OpenPose(Dataset):
                           img_fn.endswith('.jpg') and
                           not img_fn.startswith('.'))]
         self.img_paths = sorted(self.img_paths)
-        assert len(self.img_paths) == 8
+        assert len(self.img_paths) == 4
         # self.img_paths = self.img_paths[1::2]    # PIGEONSH: SPARSE VIEW
         self.cnt = 0
 
-        self.cam_param = np.load("/home/vclab/dataset/Hi4D/talk/talk01/cameras/rgb_cameras.npz")
+        self.cam_param = np.load("/home/vclab/8T_SSD1/dataset/Hi4D/backhug/backhug02/cameras/rgb_cameras.npz")
         self.max_persons = kwargs['max_persons']
 
     def get_model2data(self):

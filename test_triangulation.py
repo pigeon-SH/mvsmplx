@@ -36,13 +36,13 @@ def triangulate_point(x1, x2, P1, P2):
     
     return X[:3]
 
-data_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/talk/talk01/000140"
-cam_path = "/home/vclab/dataset/Hi4D/talk/talk01/cameras/rgb_cameras.npz"
-smpl_path = os.path.join("/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0901_nointer_noself/smpl_param.pkl")
-body_models, _, _ = load_body_model(smpl_path)
+data_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/hug/hug02/000074"
+cam_path = "/home/vclab/dataset/Hi4D/hug/hug02/cameras/rgb_cameras.npz"
+# smpl_path = os.path.join("/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0901_nointer_noself/smpl_param.pkl")
+# body_models, _, _ = load_body_model(smpl_path)
 
 cam_param = np.load(cam_path)
-cam_ids = cam_param['ids']
+cam_ids = cam_param['ids'][1::2]
 frame_idx = int(os.path.basename(data_root))
 
 keypoint_dict = {}
@@ -165,7 +165,7 @@ for idx, cam_id in enumerate(cam_ids):
         for pts in kpts_masked:
             if pts[2] > 0.0:
                 cv2.circle(img, (int(pts[0]), int(pts[1])), radius=8, color=color, thickness=-1)
-    cv2.imwrite(f"test_{cam_id:02d}.png", img)
+    cv2.imwrite(f"test_hug_{cam_id:02d}.png", img)
 diffs = np.concatenate(diff_list, axis=0)
 plt.plot(np.arange(len(diffs)), diffs)
-plt.savefig("test.png")
+plt.savefig("test_hug.png")

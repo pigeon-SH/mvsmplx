@@ -28,7 +28,7 @@ def load_prior():
     angle_prior = create_prior(prior_type='angle').to(device=device)
     return body_pose_prior, jaw_prior, expr_prior, left_hand_prior, right_hand_prior, shape_prior, angle_prior
 
-def save_models(body_models, transls):
+def save_models(body_models, transls, root="./"):
     verts_total = []
     faces_total = []
     for person_id in range(max_persons):
@@ -37,7 +37,7 @@ def save_models(body_models, transls):
         verts = body_model_output.vertices.cpu().detach().numpy()[0] + transls[person_id].cpu().detach().numpy()
         faces = body_model.faces
         mesh = trimesh.Trimesh(vertices=verts, faces=faces)
-        mesh.export(f"test_{person_id}.obj")
+        mesh.export(os.path.join(root, f"test_{person_id}.obj"))
     
         verts_total.append(verts)
         faces_total.append(faces + person_id * len(verts))
@@ -45,7 +45,7 @@ def save_models(body_models, transls):
     vertices = np.concatenate(verts_total, axis=0)
     faces = np.concatenate(faces_total, axis=0)
     out_mesh = trimesh.Trimesh(vertices, faces)
-    out_mesh.export("test_total.obj")
+    out_mesh.export(os.path.join(root, "test_total.obj"))
 
 def load_dataset(data_root, cam_path):
     cam_param = np.load(cam_path)
@@ -157,7 +157,8 @@ def load_body_model(smpl_path=None, vposer_latent_dim=32):
 
 def main():
     data_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/talk/talk01/000140"
-    result_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0901_nointer_noself_trimasked"
+    # result_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0901_nointer_noself_trimasked"
+    result_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0902_nointer_noself_trimasked_4view"
     cam_path = "/home/vclab/dataset/Hi4D/talk/talk01/cameras/rgb_cameras.npz"
     vposer_path = "./vposer/models"
     
@@ -276,7 +277,7 @@ def main():
         loss.backward()
         optimizer.step()
         # print(f"EPOCH {epoch:02d} LOSS: {loss.item():6.4f} JOINT: {joint_loss.item():6.4f} PRIOR: {prior_loss.item():6.4f} RANKING: {ranking_loss:6.4f}")
-    save_models(body_models, transls)
+    save_models(body_models, transls, result_root)
 
 if __name__ == "__main__":
     main()
