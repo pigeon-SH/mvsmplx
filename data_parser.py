@@ -354,8 +354,8 @@ def update_mask_with_keypoints(mask, keypoints):
     
     # return new_mask
     if 28 in mask:
-        mask[mask == np.array([255, 120, 28])] = 1
-        mask[mask == np.array([28, 163, 255])] = 2
+        mask[mask == np.array([28, 163, 255])] = 1
+        mask[mask == np.array([255, 120, 28])] = 2        
     else:
         mask[mask == np.array([255, 255, 255])] = 1
         mask[mask == np.array([125, 125, 125])] = 2

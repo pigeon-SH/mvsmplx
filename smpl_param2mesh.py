@@ -1,1 +1,0 @@
-from smplx.body_models import SMPL

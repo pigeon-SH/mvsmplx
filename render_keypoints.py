@@ -4,22 +4,25 @@ import json
 import os
 import cv2
 
-colors = ((0, 0, 255), (255, 0, 0))
+colors = ((255, 0, 0), (0, 255, 0))
+IDENTITY = [np.array([28, 163, 255]), np.array([255, 120, 28])]
 
 #for cam_id in [4, 16, 28, 40, 52, 64, 76, 88]:
 for cam_id in [4, 28, 52, 76]:
-    img_path = f"/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/backhug/backhug02/000126/color/000126_{cam_id:02d}.jpg"
-    kpts_path = f"/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/backhug/backhug02/000126/keypoints_raw/000126_{cam_id:02d}_keypoints.json"
+    # img_path = f"/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/backhug/backhug02/000001/color/000001_{cam_id:02d}.jpg"
+    img_path = f"/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/backhug/backhug02/000100/mask_gt/000100_{cam_id:02d}.png"
+    kpts_path = f"/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/backhug/backhug02/000100/keypoints_openpose/000100_{cam_id:02d}_keypoints.json"
 
     img = cv2.imread(img_path)
+    img[(img == IDENTITY[0]).all(axis=-1)] = 125
+    img[(img == IDENTITY[1]).all(axis=-1)] = 255
     # mask[mask == 125] = 250
     # mask[mask == 255] = 125
     with open(kpts_path, "r") as fp:
         kpts_data = json.load(fp)['people']
 
     for i, kpts_d in enumerate(kpts_data):
-        # idx = kpts_d['person_id']
-        idx = i
+        idx = kpts_d['person_id']
         kpts = np.array(kpts_d['pose_keypoints_2d'], dtype=np.float32).reshape(25, 3)
         for kpt in kpts:
             if kpt[-1] > 0.0:

@@ -282,13 +282,13 @@ class FittingMonitor(object):
                     losses.append(l)
                     total_loss += l
             inter_person_loss_total = 0.
-            # for i in range(len(camera_list)):
-            #     inter_person_loss = inter_person_loss_list[i]
-            #     if inter_person_loss is None or (inter_person_loss.coll_loss_weight == 0).all():
-            #         continue
-            #     mask = torch.tensor(mask_list[i], device=body_poses[0].device)
-            #     inter_person_loss_total += inter_person_loss(body_models, body_poses, camera_list[i], 
-            #                                     global_body_translations, body_model_scale, faces_tensors[0], mask)
+            for i in range(len(camera_list)):
+                inter_person_loss = inter_person_loss_list[i]
+                if inter_person_loss is None or (inter_person_loss.coll_loss_weight == 0).all():
+                    continue
+                mask = torch.tensor(mask_list[i], device=body_poses[0].device)
+                inter_person_loss_total += inter_person_loss(body_models, body_poses, camera_list[i], 
+                                                global_body_translations, body_model_scale, faces_tensors[0], mask)
             total_loss = total_loss + inter_person_loss_total # * 0.115
             if backward:
                 total_loss.backward(create_graph=create_graph)

@@ -5,7 +5,7 @@ import numpy as np
 import itertools
 
 # IDENTITY = [np.array([255, 255, 255]), np.array([125, 125, 125])]
-IDENTITY = [np.array([28, 120, 255]), np.array([255, 163, 28])]
+IDENTITY = [np.array([28, 163, 255]), np.array([255, 120, 28])]
 
 frames = list(range(1, 151))
 # cam_ids = [4, 16, 28, 40, 52, 64, 76, 88]
@@ -25,14 +25,19 @@ for frame_name in frames:
         intersects = []
 
         if len(kpts_data['people']) == 1:
-            kpts = np.array(human_data['pose_keypoints_2d']).reshape(25, 3)
-            kpts = kpts[kpts[:, -1] > 0.3]
+            human_data = kpts_data['people'][0]
+            body_kpts = np.array(human_data['pose_keypoints_2d']).reshape(-1, 3)
+            face_kpts = np.array(human_data['face_keypoints_2d']).reshape(-1, 3)
+            lhand_kpts = np.array(human_data['hand_left_keypoints_2d']).reshape(-1, 3)
+            rhand_kpts = np.array(human_data['hand_right_keypoints_2d']).reshape(-1, 3)
+            kpts = np.concatenate([body_kpts, face_kpts, lhand_kpts, rhand_kpts], axis=0)
+            kpts = kpts[kpts[:, -1] > 0.31]
             kpts = np.floor(kpts).astype(np.int16)
             rgb = mask[kpts[:, 1], kpts[:, 0]]
 
-            intersect = (rgb == IDENTITY[0]).sum(axis=0)[0]
+            intersect = (rgb == IDENTITY[0]).all(axis=-1).sum()
             prob0 = intersect / len(kpts)
-            intersect = (rgb == IDENTITY[1]).sum(axis=0)[0]
+            intersect = (rgb == IDENTITY[1]).all(axis=-1).sum()
             prob1 = intersect / len(kpts)
             if prob0 > prob1:
                 kpts_data['people'][0]['person_id'] = 0
@@ -49,14 +54,14 @@ for frame_name in frames:
                 kpts = np.floor(kpts).astype(np.int16)
                 rgb = mask[kpts[:, 1], kpts[:, 0]]
 
-                intersect = (rgb == IDENTITY[0]).sum(axis=0)[0]
+                intersect = (rgb == IDENTITY[0]).all(axis=-1).sum()
                 probs.append(intersect / len(kpts))
-                intersect = (rgb == IDENTITY[1]).sum(axis=0)[0]
+                intersect = (rgb == IDENTITY[1]).all(axis=-1).sum()
                 probs.append(intersect / len(kpts))
 
-                intersects.append((rgb == IDENTITY[0]).sum(axis=0)[0])
-                intersects.append((rgb == IDENTITY[1]).sum(axis=0)[0])
-                intersects.append(len(kpts))
+                # intersects.append((rgb == IDENTITY[0]).sum(axis=0)[0])
+                # intersects.append((rgb == IDENTITY[1]).sum(axis=0)[0])
+                # intersects.append(len(kpts))
                 kpts_data['people'][human_idx]['person_id'] = -1
             
             if probs[0] * probs[1] == 0:

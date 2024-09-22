@@ -218,20 +218,21 @@ def main(**args):
         if use_cuda:
             camera = camera.to(device)
         
-        for person_id in range(len(keypoints)):
-            kpts = keypoints[person_id]
-            kpts_mask = mask[kpts[:, 1].astype(np.int16), kpts[:, 0].astype(np.int16)]
-            keypoints[person_id][kpts_mask != (person_id + 1)] = 0.
+        if args["kpts_filter_mask"]:
+            for person_id in range(len(keypoints)):
+                kpts = keypoints[person_id]
+                kpts_mask = mask[kpts[:, 1].astype(np.int16), kpts[:, 0].astype(np.int16)]
+                keypoints[person_id][kpts_mask != (person_id + 1)] = 0.
 
-        import cv2
-        colors = ((0, 0, 255), (255, 0, 0))
-        msk = mask.copy() * 125
-        for i in range(len(keypoints)):
-            kpts = keypoints[i]
-            for kpt in kpts:
-                if kpt[-1] > 0.0:
-                    cv2.circle(msk, (int(kpt[0]), int(kpt[1])), radius=8, color=colors[i], thickness=-1)
-        cv2.imwrite("test_" + fn + ".png", msk)
+        # import cv2
+        # colors = ((0, 0, 255), (255, 0, 0))
+        # msk = mask.copy() * 125
+        # for i in range(len(keypoints)):
+        #     kpts = keypoints[i]
+        #     for kpt in kpts:
+        #         if kpt[-1] > 0.0:
+        #             cv2.circle(msk, (int(kpt[0]), int(kpt[1])), radius=8, color=colors[i], thickness=-1)
+        # cv2.imwrite("test_" + fn + ".png", msk)
 
         img_list.append(img)
         keypoints_list.append(keypoints)
