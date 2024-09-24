@@ -38,82 +38,16 @@ from smplx.lbs import transform_mat
 from pysdf import SDF
 import trimesh
 
-
-@torch.no_grad()
-def guess_init(model,
-               joints_2d,
-               edge_idxs,
-               focal_length=5000,
-               pose_embedding=None,
-               vposer=None,
-               use_vposer=True,
-               dtype=torch.float32,
-               model_type='smpl',
-               **kwargs):
-    ''' Initializes the camera translation vector
-
-        Parameters
-        ----------
-        model: nn.Module
-            The PyTorch module of the body
-        joints_2d: torch.tensor 1xJx2
-            The 2D tensor of the joints
-        edge_idxs: list of lists
-            A list of pairs, each of which represents a limb used to estimate
-            the camera translation
-        focal_length: float, optional (default = 5000)
-            The focal length of the camera
-        pose_embedding: torch.tensor 1x32
-            The tensor that contains the embedding of V-Poser that is used to
-            generate the pose of the model
-        dtype: torch.dtype, optional (torch.float32)
-            The floating point type used
-        vposer: nn.Module, optional (None)
-            The PyTorch module that implements the V-Poser decoder
-        Returns
-        -------
-        init_t: torch.tensor 1x3, dtype = torch.float32
-            The vector with the estimated camera location
-
-    '''
-
-    body_pose = vposer.decode(
-        pose_embedding, output_type='aa').view(1, -1) if use_vposer else None
-    if use_vposer and model_type == 'smpl':
-        wrist_pose = torch.zeros([body_pose.shape[0], 6],
-                                 dtype=body_pose.dtype,
-                                 device=body_pose.device)
-        body_pose = torch.cat([body_pose, wrist_pose], dim=1)
-
-    output = model(body_pose=body_pose, return_verts=False,
-                   return_full_pose=False)
-    joints_3d = output.joints
-    joints_2d = joints_2d.to(device=joints_3d.device)
-
-    diff3d = []
-    diff2d = []
-    for edge in edge_idxs:
-        diff3d.append(joints_3d[:, edge[0]] - joints_3d[:, edge[1]])
-        diff2d.append(joints_2d[:, edge[0]] - joints_2d[:, edge[1]])
-
-    diff3d = torch.stack(diff3d, dim=1)
-    diff2d = torch.stack(diff2d, dim=1)
-
-    length_2d = diff2d.pow(2).sum(dim=-1).sqrt()
-    length_3d = diff3d.pow(2).sum(dim=-1).sqrt()
-
-    height2d = length_2d.mean(dim=1)
-    height3d = length_3d.mean(dim=1)
-
-    est_d = focal_length * (height3d / height2d)
-
-    # just set the z value
-    batch_size = joints_3d.shape[0]
-    x_coord = torch.zeros([batch_size], device=joints_3d.device,
-                          dtype=dtype)
-    y_coord = x_coord.clone()
-    init_t = torch.stack([x_coord, y_coord, est_d], dim=1)
-    return init_t
+# https://github.com/zju3dv/instant-nvr/blob/master/lib/utils/blend_utils.py
+NUM_PARTS = 5
+part_bw_map = {
+    'body': [14, 13, 9, 6, 3, 0],
+    'leg': [1, 2, 4, 5, 7, 8, 10, 11],
+    'head': [12, 15],
+    'larm': [16, 18, 20, 22],
+    'rarm': [17, 19, 21, 23],
+}
+partnames = ['body', 'leg', 'head', 'larm', 'rarm']
 
 
 class FittingMonitor(object):
@@ -340,6 +274,7 @@ class SMPLifyLoss(nn.Module):
                  coll_loss_weight=0.0,
                  body_model_scale=1.0,
                  reduction='sum',
+                 prev_verts=None,
                  **kwargs):
 
         super(SMPLifyLoss, self).__init__()
@@ -389,6 +324,8 @@ class SMPLifyLoss(nn.Module):
         if self.interpenetration:
             self.register_buffer('coll_loss_weight',
                                  torch.tensor(coll_loss_weight, dtype=dtype))
+        
+        self.prev_verts = prev_verts
 
     def reset_loss_weights(self, loss_weight_dict):
         for key in loss_weight_dict:
@@ -484,12 +421,15 @@ class SMPLifyLoss(nn.Module):
                 pen_loss = torch.sum(
                     self.coll_loss_weight *
                     self.pen_distance(triangles, collision_idxs))
-
+        if self.prev_verts is not None:
+            temporal_loss = torch.nn.functional.mse_loss(body_model_output.vertices[0], self.prev_verts)
+        else:
+            temporal_loss = 0.0
         # print(f"JOINT: {joint_loss.item():11.5f} PPRIOR: {pprior_loss.item():11.5f} SHAPE: {shape_loss.item():11.5f} ANGLE: {angle_prior_loss.item():11.5f} PEN: {pen_loss:11.5f}")
         total_loss = (joint_loss + pprior_loss + shape_loss +
                       angle_prior_loss + pen_loss +
                       jaw_prior_loss + expression_loss +
-                      left_hand_prior_loss + right_hand_prior_loss)
+                      left_hand_prior_loss + right_hand_prior_loss + temporal_loss)
         return total_loss
 
 
@@ -547,16 +487,11 @@ class SMPLifyCameraInitLoss(nn.Module):
         return joint_loss + depth_loss
 
 
-class InterPersonLoss(nn.Module):
+class CollisionLoss(nn.Module):
 
-    def __init__(self, search_tree=None,
-                 pen_distance=None, 
-                 tri_filtering_module=None,
-                 dtype=torch.float32,
-                 coll_loss_weight=0.0,
-                 ):
+    def __init__(self, dtype=torch.float32, coll_loss_weight=0.0,):
 
-        super(InterPersonLoss, self).__init__()
+        super(CollisionLoss, self).__init__()
 
         # self.search_tree = search_tree
         # self.tri_filtering_module = tri_filtering_module
@@ -579,10 +514,7 @@ class InterPersonLoss(nn.Module):
 
     def forward(self, body_models, body_poses, camera, global_body_translations,
                 body_model_scale, body_model_face, mask):
-
-        camera_mat = transform_mat(camera.rotation, camera.translation.unsqueeze(dim=-1))[0]
-        camera_center = torch.inverse(camera_mat)[:3, 3]
-
+        
         body_model_outputs = []
         for person_id in range(len(body_models)):
             betas = body_models[person_id].betas
@@ -597,6 +529,7 @@ class InterPersonLoss(nn.Module):
         intruder_indices = [0, 1]
         receiver_indices = [1, 0]
         verts_colls = []
+        sdf_masks = []
         for i in range(2):
             int_idx = intruder_indices[i]
             rec_idx = receiver_indices[i]
@@ -606,29 +539,32 @@ class InterPersonLoss(nn.Module):
             # sdf = mesh_to_sdf.mesh_to_sdf(receiver, int_verts.cpu().detach().numpy(), surface_point_method='scan', sign_method='normal', bounding_radius=None, scan_count=100, scan_resolution=400, sample_point_count=10000000, normal_sample_count=11)
             sdf_f = SDF(rec_verts.cpu().detach().numpy(), body_model_face) # receiver.vertices, receiver.faces)
             sdf = sdf_f(int_verts.cpu().detach().numpy())
-
             sdf_mask = sdf > 0 # < 0
             verts_coll = int_verts[sdf_mask, :]
             verts_colls.append(verts_coll)
-
-        pos_dists = []
-        neg_dists = []
-        for person_id in intruder_indices:
-            verts_proj = camera((body_model_scale * verts_colls[person_id] + global_body_translations[person_id][None])[None])[0]
-            # mask = torch.tensor(mask, device=body_model_face.device)
-            y_idx = torch.clip(verts_proj[..., 1].int(), 0, mask.shape[0]-1)
-            x_idx = torch.clip(verts_proj[..., 0].int(), 0, mask.shape[1]-1)
-            verts_proj_mask = mask[y_idx, x_idx] == (person_id + 1)
-            verts_proj_mask = verts_proj_mask[..., 0]
-            pos_dist = ((verts_colls[person_id][verts_proj_mask] - camera_center[None]) ** 2).mean()
-            neg_dist = ((verts_colls[person_id][~verts_proj_mask] - camera_center[None]) ** 2).mean()
-            pos_dists.append(pos_dist)
-            neg_dists.append(neg_dist)
+            sdf_masks.append(sdf_mask)
 
         m = 1.0
-        ranking_loss = 0.
-        r_loss_0 = m + pos_dists[0] - neg_dists[1]
-        r_loss_1 = m + pos_dists[1] - neg_dists[0]
-        ranking_loss = ranking_loss + r_loss_0 if r_loss_0 > 0 else ranking_loss
-        ranking_loss = ranking_loss + r_loss_1 if r_loss_1 > 0 else ranking_loss
-        return ranking_loss * 100
+        ranking_loss = 0.0
+        for i in range(2):
+            int_idx = intruder_indices[i]
+            rec_idx = receiver_indices[i]
+            rec_verts = verts_colls[rec_idx]
+            int_verts = verts_colls[int_idx]
+            
+            int_part_id = body_models[person_id].lbs_weights.argmax(dim=-1)
+            int_coll_id = int_part_id[sdf_masks[int_idx]]
+            for id in int_coll_id.unique():
+                pull_verts = int_verts[int_coll_id == id]
+                mean_pos = pull_verts.mean(dim=0)
+                threshold = torch.amax(torch.norm(pull_verts - mean_pos, dim=-1))
+                rec_dist = torch.norm(rec_verts - mean_pos, dim=-1)
+                push_verts = rec_verts[rec_dist < threshold]
+                if len(push_verts) == 0:
+                    continue
+                pos_dist = torch.norm(pull_verts - mean_pos, dim=-1).mean()
+                neg_dist = torch.norm(push_verts - mean_pos, dim=-1).mean()
+                loss = torch.clamp(m + pos_dist - neg_dist, min=0.0)
+                ranking_loss = ranking_loss + loss
+        
+        return ranking_loss

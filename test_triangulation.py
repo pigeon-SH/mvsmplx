@@ -36,13 +36,13 @@ def triangulate_point(x1, x2, P1, P2):
     
     return X[:3]
 
-data_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/hug/hug02/000074"
-cam_path = "/home/vclab/dataset/Hi4D/hug/hug02/cameras/rgb_cameras.npz"
+data_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/backhug/backhug02/000019"
+cam_path = "/home/vclab/8T_SSD1/dataset/Hi4D/backhug/backhug02/cameras/rgb_cameras.npz"
 # smpl_path = os.path.join("/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0901_nointer_noself/smpl_param.pkl")
 # body_models, _, _ = load_body_model(smpl_path)
 
 cam_param = np.load(cam_path)
-cam_ids = cam_param['ids'][1::2]
+cam_ids = cam_param['ids'][::2]
 frame_idx = int(os.path.basename(data_root))
 
 keypoint_dict = {}
@@ -139,15 +139,15 @@ for person_id in range(2):
     fig = plt.figure()
     ax = fig.add_subplot()
     ax.plot(np.arange(len(diffs)), diffs)
-    fig.savefig("test_after.png")
+    fig.savefig("test_triang_after.png")
 
-save_dir = os.path.join(data_root, "keypoints_masked")
-os.makedirs(save_dir, exist_ok=True)
+#save_dir = os.path.join(data_root, "keypoints_masked")
+#os.makedirs(save_dir, exist_ok=True)
 for idx, cam_id in enumerate(cam_ids):
     fn = f"{frame_idx:06d}_{cam_id:02d}"
     keypoint_dict[cam_id] = np.stack(keypoint_dict[cam_id], axis=0)
-    save_path = os.path.join(save_dir, fn + "_keypoints.npy")
-    np.save(save_path, keypoint_dict[cam_id])
+    #save_path = os.path.join(save_dir, fn + "_keypoints.npy")
+    #np.save(save_path, keypoint_dict[cam_id])
 
     orig_path = os.path.join(data_root, "color", fn + ".jpg")
     orig_img = cv2.imread(orig_path)
@@ -165,7 +165,7 @@ for idx, cam_id in enumerate(cam_ids):
         for pts in kpts_masked:
             if pts[2] > 0.0:
                 cv2.circle(img, (int(pts[0]), int(pts[1])), radius=8, color=color, thickness=-1)
-    cv2.imwrite(f"test_hug_{cam_id:02d}.png", img)
+    cv2.imwrite(f"test_triang_{cam_id:02d}.png", img)
 diffs = np.concatenate(diff_list, axis=0)
 plt.plot(np.arange(len(diffs)), diffs)
-plt.savefig("test_hug.png")
+plt.savefig("test_triang.png")

@@ -29,6 +29,7 @@ import os.path as osp
 
 import numpy as np
 import torch
+import torch.nn as nn
 
 from tqdm import tqdm
 
@@ -104,6 +105,9 @@ def fit_single_frame(img_list,
                      left_shoulder_idx=2,
                      right_shoulder_idx=5,
                      mask_list=None,
+                     prev_verts=None,
+                     prev_param=None,
+                     collision_loss=False,
                      **kwargs):
     assert batch_size == 1, 'PyTorch L-BFGS only supports batch_size == 1'
     assert len(img_list) == len(keypoints_list)
@@ -190,9 +194,15 @@ def fit_single_frame(img_list,
     use_vposer = kwargs.get('use_vposer', True)
     vposer, pose_embeddings = [None, ] * 2
     if use_vposer:
-        pose_embeddings = torch.zeros([max_persons, 32],
-                                    dtype=dtype, device=device,
-                                    requires_grad=True)
+        if prev_param is not None:
+            pose_embeddings = []
+            for i in range(max_persons):
+                pose_embeddings.append(torch.tensor(prev_param[i]['result']['body_pose_embedding'], dtype=torch.float32, device=device))
+            pose_embeddings = torch.stack(pose_embeddings, dim=0).requires_grad_(True)
+        else:
+            pose_embeddings = torch.zeros([max_persons, 32],
+                                        dtype=dtype, device=device,
+                                        requires_grad=True)
 
         vposer_ckpt = osp.expandvars(vposer_ckpt)
         vposer, _ = load_vposer(vposer_ckpt, vp_model='snapshot')
@@ -200,8 +210,14 @@ def fit_single_frame(img_list,
         vposer.eval()
 
     if use_vposer:
-        body_mean_poses = torch.zeros([max_persons, vposer_latent_dim],
-                                     dtype=dtype)
+        if prev_param is not None:
+            body_mean_poses = []
+            for i in range(max_persons):
+                body_mean_poses.append(prev_param[i]['result']['body_pose'])
+            body_mean_poses = torch.concat(body_mean_poses, dim=0)
+        else:
+            body_mean_poses = torch.zeros([max_persons, vposer_latent_dim],
+                                        dtype=dtype)
     else:
         breakpoint()
         body_mean_poses = body_pose_prior.get_mean().detach().cpu()
@@ -212,7 +228,7 @@ def fit_single_frame(img_list,
     joints_conf_list = list()
 
     assert(view_num > 0)
-    inter_person_loss_list = []
+    collision_loss_list = []
     for view_id in range(view_num):
         valid_person_cnt = 0
         loss_list_person = list()
@@ -336,22 +352,29 @@ def fit_single_frame(img_list,
                                     # I scale the mesh model to [-0.5, 0.5] during rendering;
                                     # so I need to perform the same scaling
                                     # to make the body shapee plausible
+                                    prev_verts=prev_verts[person_id] if prev_verts is not None else None,
                                     dtype=dtype,
                                     **kwargs)
             loss = loss.to(device=device)
             loss_list_person.append(loss)
-        if valid_person_cnt > 1:
-            inter_person_loss = fitting.InterPersonLoss(search_tree=search_tree, pen_distance=pen_distance)
+        if collision_loss and valid_person_cnt > 1:
+            collision_loss_fn = fitting.CollisionLoss()
         else:
-            inter_person_loss = None
+            collision_loss_fn = None
         loss_list.append(loss_list_person)
         gt_joints_list.append(gt_joints_list_person)
         joints_conf_list.append(joints_conf_list_person)
-        inter_person_loss_list.append(inter_person_loss)
+        collision_loss_list.append(collision_loss_fn)
 
     body_scale = torch.tensor([1.0], dtype=dtype, device=device,)
                               # requires_grad=True)
-    global_body_translations = torch.tensor([[0, 0, 0] for _ in range(max_persons)], dtype=dtype, device=device,
+    if prev_param is not None:
+        global_body_translations = []
+        for i in range(max_persons):
+            global_body_translations.append(torch.tensor(prev_param[i]['result']['global_body_translation'], dtype=dtype, device=device))
+        global_body_translations = torch.stack(global_body_translations, dim=0).requires_grad_(True)
+    else:
+        global_body_translations = torch.tensor([[0, 0, 0] for _ in range(max_persons)], dtype=dtype, device=device,
                                            requires_grad=True)
 
     with fitting.FittingMonitor(
@@ -365,40 +388,13 @@ def fit_single_frame(img_list,
 
         # Reset the parameters to estimate the initial translation of the
         # body model
-        for person_id in range(max_persons):
-            body_models[person_id].reset_params(body_pose=body_mean_poses[person_id:person_id+1])
+        if prev_param is None:
+            for person_id in range(max_persons):
+                body_models[person_id].reset_params(body_pose=body_mean_poses[person_id:person_id+1])
+        else:
+            for person_id in range(max_persons):
+                body_models[person_id].register_parameter('body_pose', nn.Parameter(body_mean_poses[person_id:person_id+1].requires_grad_(True)))
 
-        # If the distance between the 2D shoulders is smaller than a
-        # predefined threshold then try 2 fits, the initial one and a 180
-        # degree rotation
-        # shoulder_dist = torch.dist(gt_joints[:, left_shoulder_idx],
-        #                            gt_joints[:, right_shoulder_idx])
-        # try_both_orient = shoulder_dist.item() < side_view_thsh
-        try_both_orient = False
-
-        # If the 2D detections/positions of the shoulder joints are too
-        # close the rotate the body by 180 degrees and also fit to that
-        # orientation
-        # orientations = []
-        # for person_id in range(max_persons):
-        #     if try_both_orient:
-        #         breakpoint()
-        #         body_orient = body_models[person_id].global_orient.detach().cpu().numpy()
-        #         flipped_orient = cv2.Rodrigues(body_orient)[0].dot(
-        #             cv2.Rodrigues(np.array([0., np.pi, 0]))[0])
-        #         flipped_orient = cv2.Rodrigues(flipped_orient)[0].ravel()
-
-        #         flipped_orient = torch.tensor(flipped_orient,
-        #                                     dtype=dtype,
-        #                                     device=device).unsqueeze(dim=0)
-        #         orientation = [body_orient, flipped_orient]
-        #     else:
-        #         orientation = [body_models[person_id].global_orient] # .detach().cpu().numpy()] 
-        #     assert len(orientation) == 1 # PIGEONSH: try_both_orient is False
-        #     orientations.append(orientation[0])
-
-        # store here the final error for both orientations,
-        # and pick the orientation resulting in the lowest error
         results = []
 
         # Step 2: Optimize the full model
@@ -410,10 +406,13 @@ def fit_single_frame(img_list,
             for person_id in range(max_persons):
                 new_params = defaultdict(# global_orient=orientations[person_id],
                                     body_pose=body_mean_poses[person_id:person_id+1])
-                body_models[person_id].reset_params(**new_params)
-                if use_vposer:
-                    with torch.no_grad():
-                        pose_embeddings[person_id].fill_(0)
+                if prev_param is None:
+                    body_models[person_id].reset_params(**new_params)
+                    if use_vposer:
+                        with torch.no_grad():
+                            pose_embeddings[person_id].fill_(0)
+                else:
+                    body_models[person_id].register_parameter('body_pose', nn.Parameter(body_mean_poses[person_id:person_id+1].requires_grad_(True)))
 
                 body_params = list(body_models[person_id].parameters())
 
@@ -442,10 +441,10 @@ def fit_single_frame(img_list,
                     if loss_list[i][person_id] is None:
                         continue
                     loss_list[i][person_id].reset_loss_weights(curr_weights)
-            for i in range(len(inter_person_loss_list)):
-                if inter_person_loss_list[i] is None:
+            for i in range(len(collision_loss_list)):
+                if collision_loss_list[i] is None:
                     continue
-                inter_person_loss_list[i].reset_loss_weights(curr_weights)
+                collision_loss_list[i].reset_loss_weights(curr_weights)
 
             closure = monitor.create_fitting_closure_multiview(
                 body_optimizer, body_models,
@@ -458,7 +457,7 @@ def fit_single_frame(img_list,
                 use_vposer=use_vposer, vposer=vposer,
                 pose_embeddings=pose_embeddings,
                 return_verts=True, return_full_pose=True,
-                inter_person_loss_list=inter_person_loss_list,
+                inter_person_loss_list=collision_loss_list,
                 mask_list=mask_list)
 
             if interactive:

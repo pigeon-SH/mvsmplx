@@ -39,6 +39,7 @@ from fit_single_frame import fit_single_frame
 
 from camera import create_camera
 from prior import create_prior
+import pickle
 
 torch.backends.cudnn.enabled = False
 
@@ -102,13 +103,6 @@ def main(**args):
                         dtype=dtype,
                         **args)
 
-    male_model = smplx.create(gender='male', **model_params)
-    # SMPL-H has no gender-neutral model
-    if args.get('model_type') != 'smplh':
-        neutral_model = smplx.create(gender='neutral', **model_params)
-    female_model = smplx.create(gender='female', **model_params)
-
-
     use_hands = args.get('use_hands', True)
     use_face = args.get('use_face', True)
 
@@ -154,11 +148,11 @@ def main(**args):
     if use_cuda and torch.cuda.is_available():
         device = torch.device('cuda')
 
-        # camera = camera.to(device=device)
-        female_model = female_model.to(device=device)
-        male_model = male_model.to(device=device)
-        if args.get('model_type') != 'smplh':
-            neutral_model = neutral_model.to(device=device)
+        # # camera = camera.to(device=device)
+        # female_model = female_model.to(device=device)
+        # male_model = male_model.to(device=device)
+        # if args.get('model_type') != 'smplh':
+        #     neutral_model = neutral_model.to(device=device)
         body_pose_prior = body_pose_prior.to(device=device)
         angle_prior = angle_prior.to(device=device)
         shape_prior = shape_prior.to(device=device)
@@ -224,15 +218,15 @@ def main(**args):
                 kpts_mask = mask[kpts[:, 1].astype(np.int16), kpts[:, 0].astype(np.int16)]
                 keypoints[person_id][kpts_mask != (person_id + 1)] = 0.
 
-        # import cv2
-        # colors = ((0, 0, 255), (255, 0, 0))
-        # msk = mask.copy() * 125
-        # for i in range(len(keypoints)):
-        #     kpts = keypoints[i]
-        #     for kpt in kpts:
-        #         if kpt[-1] > 0.0:
-        #             cv2.circle(msk, (int(kpt[0]), int(kpt[1])), radius=8, color=colors[i], thickness=-1)
-        # cv2.imwrite("test_" + fn + ".png", msk)
+        import cv2
+        colors = ((255, 0, 0), (0, 255, 0))
+        msk = mask.copy() * 125
+        for i in range(len(keypoints)):
+            kpts = keypoints[i]
+            for kpt in kpts:
+                if kpt[-1] > 0.0:
+                    cv2.circle(msk, (int(kpt[0]), int(kpt[1])), radius=8, color=colors[i], thickness=-1)
+        cv2.imwrite("test_" + fn + ".png", msk)
 
         img_list.append(img)
         keypoints_list.append(keypoints)
@@ -244,14 +238,68 @@ def main(**args):
     curr_result_fn = osp.join(output_folder, 'smpl_param.pkl')
     curr_mesh_fn = osp.join(output_folder, 'smpl_mesh.obj')
 
-    gender = input_gender
-    if gender == 'neutral':
-        body_model = neutral_model
-    elif gender == 'female':
-        body_model = female_model
-    elif gender == 'male':
-        body_model = male_model
-    body_models = [body_model] * max_persons
+    if args["temporal_consist"]:
+        # find previous frame predicted parameter file
+        dir_fn = osp.dirname(output_folder)
+        frame_names = sorted([name for name in os.listdir(dir_fn) if name.isdigit()])
+        curr_name = osp.basename(output_folder)
+        if curr_name in frame_names:
+            if frame_names.index(curr_name) == 0:
+                args["temporal_consist"] = False
+            else:
+                prev_name = frame_names[frame_names.index(curr_name) - 1]
+        else:
+            if not curr_name.isdigit():
+                args["temporal_consist"] = False
+            else:
+                raise NotImplementedError()
+        
+    if args["temporal_consist"]:
+        # load previous frame predicted parameter
+        prev_result_fn = osp.join(dir_fn, prev_name, 'smpl_param.pkl')
+        with open(prev_result_fn, "rb") as fp:
+            prev_param = pickle.load(fp)
+        prev_param.sort(key=lambda x:x['person_id'])
+        prev_verts = []
+        with torch.no_grad():
+            for i in range(max_persons):
+                prev_param[i]['result']['body_pose'] = torch.tensor(prev_param[i]['result']['body_pose'][:, 3:], dtype=torch.float32).to(device=device)
+                # model_params.update(prev_param[i]['result'])
+                prev_model = smplx.create(gender='neutral', **model_params, **prev_param[i]['result']).to(device=device)
+                prev_verts.append(prev_model(body_pose=prev_param[i]['result']['body_pose']).vertices[0])
+            prev_verts = torch.stack(prev_verts, dim=0) # (P, V, 3)
+
+        # SMPL-H has no gender-neutral model
+        gender = input_gender
+        body_models = []
+        for i in range(max_persons):
+            if gender == 'neutral':
+                if args.get('model_type') != 'smplh':
+                    body_model = smplx.create(gender='neutral', **model_params, **prev_param[i]['result'])
+                else:
+                    raise NotImplementedError()
+            elif gender == 'female':
+                body_model = smplx.create(gender='female', **model_params, **prev_param[i]['result'])
+            elif gender == 'male':
+                body_model = smplx.create(gender='male', **model_params, **prev_param[i]['result'])
+            body_models.append(body_model.to(device=device))
+    else:
+        prev_verts = None
+        prev_param = None
+        # SMPL-H has no gender-neutral model
+        gender = input_gender
+        body_models = []
+        for _ in range(max_persons):
+            if gender == 'neutral':
+                if args.get('model_type') != 'smplh':
+                    body_model = smplx.create(gender='neutral', **model_params)
+                else:
+                    raise NotImplementedError()
+            elif gender == 'female':
+                body_model = smplx.create(gender='female', **model_params)
+            elif gender == 'male':
+                body_model = smplx.create(gender='male', **model_params)
+            body_models.append(body_model.to(device=device))
 
     fit_single_frame(img_list, keypoints_list,
                      body_models=body_models,
@@ -269,6 +317,8 @@ def main(**args):
                      jaw_prior=jaw_prior,
                      angle_prior=angle_prior,
                      mask_list=mask_list,
+                     prev_verts=prev_verts,
+                     prev_param=prev_param,
                      **args)
 
     elapsed = time.time() - start
