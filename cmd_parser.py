@@ -282,6 +282,7 @@ def parse_config(argv=None):
     parser.add_argument("--kpts_filter_mask", type=bool, default=False)
     parser.add_argument("--temporal_consist", type=bool, default=False)
     parser.add_argument("--collision_loss", type=bool, default=False)
+    parser.add_argument("--mask_folder", type=str, default="mask_pred")
 
     args = parser.parse_args()
     args_dict = vars(args)

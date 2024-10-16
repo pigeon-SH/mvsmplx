@@ -90,6 +90,7 @@ def read_keypoints(keypoint_fn, use_hands=True, use_face=True,
 
             body_keypoints = np.concatenate(
                 [body_keypoints, face_keypoints, contour_keyps], axis=0)
+            body_keypoints[body_keypoints[..., -1] < 0.3] = 0.0
 
         if 'gender_pd' in person_data:
             gender_pd.append(person_data['gender_pd'])
@@ -170,7 +171,7 @@ class OpenPose(Dataset):
                           img_fn.endswith('.jpg') and
                           not img_fn.startswith('.'))]
         self.img_paths = sorted(self.img_paths)
-        assert len(self.img_paths) == 4
+        assert len(self.img_paths) == 8
         # self.img_paths = self.img_paths[1::2]    # PIGEONSH: SPARSE VIEW
         self.cnt = 0
 
@@ -234,12 +235,15 @@ class OpenPose(Dataset):
             
             mask_fn = osp.join(self.mask_folder, img_fn + '.png')
             mask = cv2.imread(mask_fn).astype(np.float32)
-            mask = update_mask_with_keypoints(mask, keyp_tuple.keypoints)
+            mask = update_mask_with_keypoints(mask)
 
             # if len(keyp_tuple.keypoints) < 1:
             #     return {}
             keypoints = keyp_tuple.keypoints
 
+        out_of_image_mask = np.logical_or(np.logical_or(keypoints[..., 0] < 0, keypoints[..., 0] > mask.shape[1]), 
+                                          np.logical_or(keypoints[..., 1] < 0, keypoints[..., 1] > mask.shape[0]), )
+        keypoints[out_of_image_mask] = 0.0
         output_dict = {'fn': img_fn,
                        'img_path': img_path,
                        'keypoints': keypoints, 
@@ -302,60 +306,14 @@ class OpenPose(Dataset):
         return self.read_item(img_path)
 
 
-def update_mask_with_keypoints(mask, keypoints):
-    # from scipy.optimize import linear_sum_assignment
-    # # 고유한 mask 값 추출 (배경인 0 제외)
-    # unique_values = np.unique(mask.reshape(-1, 3), axis=0)
-    # unique_values = unique_values[1:]
-    
-    # num_values = len(unique_values)
-    # num_people = keypoints.shape[0]
-    
-    # # 겹침 정도를 저장할 매트릭스 초기화 (values x people)
-    # overlap_matrix = np.zeros((num_values, num_people), dtype=int)
-    
-    # # 각 고유 값에 대해 계산
-    # for i, value in enumerate(unique_values):
-    #     # 현재 value의 영역 마스크
-    #     value_mask = (mask == value).sum(axis=-1)
-        
-    #     # 각 사람에 대해
-    #     for j in range(num_people):
-    #         person_overlap = 0
-            
-    #         # 해당 사람의 keypoint 좌표들 가져오기
-    #         person_keypoints = keypoints[j, :, :2].astype(int)
-            
-    #         # keypoint가 value 영역과 얼마나 겹치는지 계산
-    #         for x, y in person_keypoints:
-    #             if value_mask[y, x]:
-    #                 person_overlap += 1
-            
-    #         # 겹치는 정도를 매트릭스에 저장
-    #         overlap_matrix[i, j] = person_overlap
-    
-    # # 겹침 정도를 최대화하는 매칭 찾기 (헝가리안 알고리즘 사용)
-    # row_indices, col_indices = linear_sum_assignment(-overlap_matrix)
-    
-    # # 새로운 mask를 기존 mask의 복사본으로 생성
-    # new_mask = np.zeros_like(mask)
-    
-    # # 매칭된 결과를 이용하여 mask 값 업데이트
-    # for row_idx, col_idx in zip(row_indices, col_indices):
-    #     value = unique_values[row_idx]
-    #     person_idx = col_idx + 1  # 사람 인덱스는 1부터 시작하므로 +1
-    #     # new_mask[mask == value] = person_idx
-    #     match = np.all(mask == value, axis=-1)
-    #     new_mask[match] = person_idx
-    #     # if person_idx == 2:
-    #     #     assert value[0] == 125
-    #     # else:
-    #     #     assert value[0] == 255
-    
-    # return new_mask
+def update_mask_with_keypoints(mask):
     if 28 in mask:
         mask[mask == np.array([28, 163, 255])] = 1
         mask[mask == np.array([255, 120, 28])] = 2        
+    elif 127 in mask:
+        assert 127 in mask and 255 in mask
+        mask[mask == 127] = 1
+        mask[mask == 255] = 2
     else:
         mask[mask == np.array([255, 255, 255])] = 1
         mask[mask == np.array([125, 125, 125])] = 2

@@ -42,7 +42,7 @@ cam_path = "/home/vclab/8T_SSD1/dataset/Hi4D/backhug/backhug02/cameras/rgb_camer
 # body_models, _, _ = load_body_model(smpl_path)
 
 cam_param = np.load(cam_path)
-cam_ids = cam_param['ids'][::2]
+cam_ids = cam_param['ids']
 frame_idx = int(os.path.basename(data_root))
 
 keypoint_dict = {}

@@ -51,9 +51,10 @@ def calculate_chamfer_p2s(src_mesh, tgt_mesh, num_samples=1000):
     return chamfer_dist, p2s_dist
 
 def main():
-    gt_root = "/home/vclab/8T_SSD1/dataset/Hi4D/backhug/backhug02/smpl"
-    pred_root = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0922_kptsmask_sapiens"
-    frames = list(range(1, 151, 2))
+    seq = "hug/hug01"
+    gt_root = f"/home/vclab/8T_SSD1/dataset/Hi4D/{seq}/smpl"
+    pred_root = f"/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/1015_temporal_kptsfilter_8view/{seq}"
+    frames = list(range(6, 126))
     NUM_PERSON = 2
 
     smpl_template_path = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/smplx/models/smpl/SMPL_NEUTRAL.pkl"
@@ -65,8 +66,6 @@ def main():
     p2s_total = 0.0
     lines = ""
     for frame_name in tqdm(frames):
-        if frame_name != 83:
-            continue
         # gt_path = "/home/vclab/8T_SSD1/dataset/Hi4D/backhug/backhug02/smpl/000001.npz"
         # pred_path = "/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0921_default/000136/smpl_param.pkl"
         gt_path = os.path.join(gt_root, f"{frame_name:06d}.npz")

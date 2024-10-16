@@ -58,7 +58,7 @@ body_map = {
 }
 
 
-def convert(openpose_path, coco_path):
+def convert(openpose_path, coco_path, ordered=False):
     NUM_BODY_OPENPOSE = 25
     NUM_FACE_OPENPOSE = 70
     NUM_HAND_OPENPOSE = 21  # per hand
@@ -73,7 +73,7 @@ def convert(openpose_path, coco_path):
         coco = json.load(f)["instance_info"]
     for person_id in range(len(coco)):
         person_info = {
-            "person_id": -1,
+            "person_id": person_id,
             "pose_keypoints_2d": [],
             "face_keypoints_2d": [],
             "hand_left_keypoints_2d": [],

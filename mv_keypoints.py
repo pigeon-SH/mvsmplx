@@ -2,38 +2,39 @@ import os
 from shutil import copyfile
 from coco2openpose import convert
 
-frames = list(range(1, 151))
+frames = list(range(1, 71))
 num_human = 2
-cam_ids = [4, 28, 52, 76]
-seq = "backhug/backhug02"
+# cam_ids = [4, 28, 52, 76]
+cam_ids = [16, 40, 64, 88]
+seq = "talk/talk22"
 data_root = os.path.join("/home/vclab/8T_SSD1/dataset/Hi4D", seq)
-# keypoint_src_root = os.path.join(data_root, "kpts2d/sapiens_2b")
-keypoint_src_root = os.path.join(data_root, "kpts2d/openpose")
+keypoint_src_root = os.path.join(data_root, "kpts2d/sapiens_2b_single")
+# keypoint_src_root = os.path.join(data_root, "kpts2d/openpose")
 save_root = os.path.join("/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/", seq)
 
-# for frame_name in frames:
-#     for cam_id in cam_ids:
-#         save_dir = os.path.join(save_root, f"{frame_name:06d}", "keypoints_coco")
-#         os.makedirs(save_dir, exist_ok=True)
-#         src_path = os.path.join(keypoint_src_root, str(cam_id), f"{frame_name:06d}.json")
-#         dst_path = os.path.join(save_dir, f"{frame_name:06d}_{cam_id:02d}_keypoints.json")
-#         copyfile(src_path, dst_path)
+for frame_name in frames:
+    for cam_id in cam_ids:
+        save_dir = os.path.join(save_root, f"{frame_name:06d}", "keypoints_coco")
+        os.makedirs(save_dir, exist_ok=True)
+        src_path = os.path.join(keypoint_src_root, str(cam_id), f"{frame_name:06d}.json")
+        dst_path = os.path.join(save_dir, f"{frame_name:06d}_{cam_id:02d}_keypoints.json")
+        copyfile(src_path, dst_path)
+
+for frame_name in frames:
+    for cam_id in cam_ids:
+        save_dir = os.path.join(save_root, f"{frame_name:06d}", "keypoints_single")
+        os.makedirs(save_dir, exist_ok=True)
+        src_path = os.path.join(save_root, f"{frame_name:06d}", "keypoints_coco", f"{frame_name:06d}_{cam_id:02d}_keypoints.json")
+        dst_path = os.path.join(save_dir, f"{frame_name:06d}_{cam_id:02d}_keypoints.json")
+        convert(dst_path, src_path, ordered=True)
 
 # for frame_name in frames:
 #     for cam_id in cam_ids:
 #         save_dir = os.path.join(save_root, f"{frame_name:06d}", "keypoints_raw")
 #         os.makedirs(save_dir, exist_ok=True)
-#         src_path = os.path.join(save_root, f"{frame_name:06d}", "keypoints_coco", f"{frame_name:06d}_{cam_id:02d}_keypoints.json")
+#         src_path = os.path.join(keypoint_src_root, str(cam_id), f"{frame_name:06d}_keypoints.json")
 #         dst_path = os.path.join(save_dir, f"{frame_name:06d}_{cam_id:02d}_keypoints.json")
-#         convert(dst_path, src_path)
-
-for frame_name in frames:
-    for cam_id in cam_ids:
-        save_dir = os.path.join(save_root, f"{frame_name:06d}", "keypoints_raw")
-        os.makedirs(save_dir, exist_ok=True)
-        src_path = os.path.join(keypoint_src_root, str(cam_id), f"{frame_name:06d}_keypoints.json")
-        dst_path = os.path.join(save_dir, f"{frame_name:06d}_{cam_id:02d}_keypoints.json")
-        copyfile(src_path, dst_path)
+#         copyfile(src_path, dst_path)
 
 img_src_root = os.path.join(data_root, "images")
 for frame_name in frames:
@@ -50,5 +51,14 @@ for frame_name in frames:
         save_dir = os.path.join(save_root, f"{frame_name:06d}", "mask_gt")
         os.makedirs(save_dir, exist_ok=True)
         src_path = os.path.join(mask_src_root, str(cam_id), "all", f"{frame_name:06d}.png")
+        dst_path = os.path.join(save_dir, f"{frame_name:06d}_{cam_id:02d}.png")
+        copyfile(src_path, dst_path)
+
+mask_src_root = os.path.join(data_root, "mask_pred")
+for frame_name in frames:
+    for cam_id in cam_ids:
+        save_dir = os.path.join(save_root, f"{frame_name:06d}", "mask_pred")
+        os.makedirs(save_dir, exist_ok=True)
+        src_path = os.path.join(mask_src_root, str(cam_id), f"{frame_name:06d}.png")
         dst_path = os.path.join(save_dir, f"{frame_name:06d}_{cam_id:02d}.png")
         copyfile(src_path, dst_path)

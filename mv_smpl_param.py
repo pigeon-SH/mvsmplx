@@ -6,33 +6,51 @@ import pickle
 
 IDENTITY = [np.array([255, 255, 255]), np.array([125, 125, 125])]
 
-frames = list(range(20, 150))
-cam_ids = [4, 16, 28, 40, 52, 64, 76, 88]
-src_root = "data/Hi4D/talk/talk01"
-dst_root = "/home/vclab/dataset/Hi4D/talk/talk01/smpl_pred"
-os.makedirs(dst_root, exist_ok=True)
+seqs = ["talk/talk22", "backhug/backhug02"] # 
+for seq in seqs:
+    src_root = os.path.join("/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/1015_temporal_8view", seq)
+    # src_root = os.path.join("/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0925_temporal_single_maskpred_nokptsmask")
+    dst_root = os.path.join("/home/vclab/8T_SSD1/dataset/Hi4D", seq, "smpl_pred_8view")
+    frame_names = sorted(os.listdir(src_root))
+    frame_names = [frame_name for frame_name in frame_names if os.path.isdir(os.path.join(src_root, frame_name))]
+    os.makedirs(dst_root, exist_ok=True)
 
-for frame_name in frames:
-    dst_path = os.path.join(dst_root, f"{frame_name:06d}.npz")
-    dst_param = {}
-    betas = []
-    global_ori = []
-    poses = []
-    trans = []
-    scale = []
-    for human_idx in range(2):
-        src_path = os.path.join(src_root, f"{frame_name:06d}", f"smpl_{human_idx}", "smpl_param.pkl")
+    for frame_name in frame_names:
+        dst_path = os.path.join(dst_root, f"{frame_name}.npz")
+        dst_param = {}
+        betas = []
+        global_orients = []
+        left_hand_poses = []
+        right_hand_poses = []
+        jaw_poses = []
+        leye_poses = []
+        reye_poses = []
+        expressions = []
+        transls = []
+        body_poses = []
+        src_path = os.path.join(src_root, frame_name, "smpl_param.pkl")
         with open(src_path, "rb") as fp:
-            src_param = pickle.load(fp)
-        # print(src_param.keys())
-        betas.append(src_param['betas'])    # (1, 10)
-        global_ori.append(src_param['global_orient'])   # (1, 3)
-        poses.append(src_param['body_pose'][:, 3:])     # (1, 69)
-        trans.append(src_param['global_body_translation'][None])  # (1, 3)
-        scale.append(src_param['body_scale'][None])     # (1, 1)
-    dst_param['betas'] = np.concatenate(betas, axis=0)  # (2, 10)
-    dst_param['global_orient'] = np.concatenate(global_ori, axis=0) # (2, 3)
-    dst_param['body_pose'] = np.concatenate(poses, axis=0)  # (2, 69)
-    dst_param['transl'] = np.concatenate(trans, axis=0) # (2, 3)
-    dst_param['scale'] = np.concatenate(scale, axis=0)  # (2, 1)
-    np.savez(dst_path, **dst_param)
+            src_params = pickle.load(fp)
+        src_params.sort(key = lambda x: x['person_id'])
+        for human_idx in range(len(src_params)):
+            betas.append(src_params[human_idx]['result']['betas']) # (1, 300)
+            global_orients.append(src_params[human_idx]['result']['global_orient']) # (1, 3)
+            left_hand_poses.append(src_params[human_idx]['result']['left_hand_pose']) # (1, 12)
+            right_hand_poses.append(src_params[human_idx]['result']['right_hand_pose']) # (1, 12)
+            jaw_poses.append(src_params[human_idx]['result']['jaw_pose']) # (1, 3)
+            leye_poses.append(src_params[human_idx]['result']['leye_pose']) # (1, 3)
+            reye_poses.append(src_params[human_idx]['result']['reye_pose']) # (1, 3)
+            expressions.append(src_params[human_idx]['result']['expression']) # (1, 100)
+            transls.append(src_params[human_idx]['result']['global_body_translation'][None]) # (1, 3)
+            body_poses.append(src_params[human_idx]['result']['body_pose'][:, 3:]) # (1, 63)
+        dst_param['betas'] = np.concatenate(betas, axis=0)  # (2, 10)
+        dst_param['global_orient'] = np.concatenate(global_orients, axis=0) # (2, 3)
+        dst_param['left_hand_pose'] = np.concatenate(left_hand_poses, axis=0) # (2, 12)
+        dst_param['right_hand_pose'] = np.concatenate(right_hand_poses, axis=0) # (2, 12)
+        dst_param['jaw_pose'] = np.concatenate(jaw_poses, axis=0) # (2, 3)
+        dst_param['leye_pose'] = np.concatenate(leye_poses, axis=0) # (2, 3)
+        dst_param['reye_pose'] = np.concatenate(reye_poses, axis=0) # (2, 3)
+        dst_param['expression'] = np.concatenate(expressions, axis=0) # (2, 100)
+        dst_param['transl'] = np.concatenate(transls, axis=0) # (2, 3)
+        dst_param['body_pose'] = np.concatenate(body_poses, axis=0) # (2, 63)
+        np.savez(dst_path, **dst_param)
