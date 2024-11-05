@@ -2,11 +2,11 @@ import os
 from shutil import copyfile
 from coco2openpose import convert
 
-frames = list(range(1, 71))
+frames = list(range(71, 151))
 num_human = 2
-# cam_ids = [4, 28, 52, 76]
-cam_ids = [16, 40, 64, 88]
-seq = "talk/talk22"
+cam_ids = [4, 28, 52, 76]
+# cam_ids = [16, 40, 64, 88]
+seq = "backhug/backhug02" # "talk/talk22"
 data_root = os.path.join("/home/vclab/8T_SSD1/dataset/Hi4D", seq)
 keypoint_src_root = os.path.join(data_root, "kpts2d/sapiens_2b_single")
 # keypoint_src_root = os.path.join(data_root, "kpts2d/openpose")

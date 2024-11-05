@@ -6,11 +6,12 @@ import pickle
 
 IDENTITY = [np.array([255, 255, 255]), np.array([125, 125, 125])]
 
-seqs = ["talk/talk22", "backhug/backhug02"] # 
+# seqs = ["hug/hug01", "talk/talk22", "backhug/backhug02"] # 
+seqs = ["backhug/backhug02"]
 for seq in seqs:
-    src_root = os.path.join("/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/1015_temporal_8view", seq)
+    src_root = os.path.join("/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/1017_temporal_7view", seq)
     # src_root = os.path.join("/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0925_temporal_single_maskpred_nokptsmask")
-    dst_root = os.path.join("/home/vclab/8T_SSD1/dataset/Hi4D", seq, "smpl_pred_8view")
+    dst_root = os.path.join("/home/vclab/8T_SSD1/dataset/Hi4D", seq, "smpl_pred_7view")
     frame_names = sorted(os.listdir(src_root))
     frame_names = [frame_name for frame_name in frame_names if os.path.isdir(os.path.join(src_root, frame_name))]
     os.makedirs(dst_root, exist_ok=True)

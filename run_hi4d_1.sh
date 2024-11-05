@@ -1,19 +1,26 @@
 GPUIDX=1
 # seq="hug/hug01"
-log="1015_temporal_kptsfilter_8view"
+log="1017_temporal_7view"
 seq="backhug/backhug02"
-for frame_idx in {1..150}
+for frame_idx in {71..150}
 do
     formatted_frame=$(printf "%06d" $frame_idx)
-    CUDA_VISIBLE_DEVICES=$GPUIDX python main.py --config cfg_files/fit_smplx.yaml --data_folder ./data_smplx/Hi4D/$seq/$formatted_frame --output_folder ./result/$log/$seq/$formatted_frame --keyp_folder keypoints_single --mask_folder mask_pred --temporal_consist True --kpts_filter_mask True
+    CUDA_VISIBLE_DEVICES=$GPUIDX python main.py --config cfg_files/fit_smplx.yaml --data_folder ./data_smplx/Hi4D/$seq/$formatted_frame --output_folder ./result/$log/$seq/$formatted_frame --keyp_folder keypoints_single --mask_folder mask_pred --temporal_consist True
 done
 
-seq="talk/talk22"
-for frame_idx in {1..70}
-do
-    formatted_frame=$(printf "%06d" $frame_idx)
-    CUDA_VISIBLE_DEVICES=$GPUIDX python main.py --config cfg_files/fit_smplx.yaml --data_folder ./data_smplx/Hi4D/$seq/$formatted_frame --output_folder ./result/$log/$seq/$formatted_frame --keyp_folder keypoints_single --mask_folder mask_pred --temporal_consist True --kpts_filter_mask True
-done
+# seq="talk/talk22"
+# for frame_idx in {1..70}
+# do
+#     formatted_frame=$(printf "%06d" $frame_idx)
+#     CUDA_VISIBLE_DEVICES=$GPUIDX python main.py --config cfg_files/fit_smplx.yaml --data_folder ./data_smplx/Hi4D/$seq/$formatted_frame --output_folder ./result/$log/$seq/$formatted_frame --keyp_folder keypoints_single --mask_folder mask_pred --temporal_consist True
+# done
+
+# seq="hug/hug01"
+# for frame_idx in {6..125}
+# do
+#     formatted_frame=$(printf "%06d" $frame_idx)
+#     CUDA_VISIBLE_DEVICES=$GPUIDX python main.py --config cfg_files/fit_smplx.yaml --data_folder ./data_smplx/Hi4D/$seq/$formatted_frame --output_folder ./result/$log/$seq/$formatted_frame --keyp_folder keypoints_single --mask_folder mask_pred --temporal_consist True
+# done
 
 # log="1015_temporal_kptsfilter_8view"
 # for frame_idx in {6..126}

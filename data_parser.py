@@ -171,7 +171,13 @@ class OpenPose(Dataset):
                           img_fn.endswith('.jpg') and
                           not img_fn.startswith('.'))]
         self.img_paths = sorted(self.img_paths)
-        assert len(self.img_paths) == 8
+        if "backhug/backhug02" in data_folder: 
+            self.img_paths = self.img_paths[:6] + self.img_paths[7:]
+        elif "hug/hug01" in data_folder: 
+            self.img_paths = self.img_paths[:7]
+        elif "talk/talk22" in data_folder:
+            self.img_paths = self.img_paths[:5] + self.img_paths[6:]
+        assert len(self.img_paths) == 7
         # self.img_paths = self.img_paths[1::2]    # PIGEONSH: SPARSE VIEW
         self.cnt = 0
 

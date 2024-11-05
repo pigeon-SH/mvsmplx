@@ -6,13 +6,13 @@ import cv2
 
 colors = ((255, 0, 0), (0, 255, 0))
 IDENTITY = [np.array([28, 163, 255]), np.array([255, 120, 28])]
-frame_num = "000040"
+frame_num = "000017"
 seq = "backhug/backhug02"
-#for cam_id in [4, 16, 28, 40, 52, 64, 76, 88]:
-for cam_id in [4, 28, 52, 76]:
+for cam_id in [4, 16, 28, 40, 52, 64, 76, 88]:
+# for cam_id in [4, 28, 52, 76]:
     img_path = f"/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/{seq}/{frame_num}/color/{frame_num}_{cam_id:02d}.jpg"
     # img_path = f"/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/backhug/backhug02/{frame_num}/mask_gt/{frame_num}_{cam_id:02d}.png"
-    kpts_path = f"/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/{seq}/{frame_num}/keypoints_openpose/{frame_num}_{cam_id:02d}_keypoints.json"
+    kpts_path = f"/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/data_smplx/Hi4D/{seq}/{frame_num}/keypoints_single/{frame_num}_{cam_id:02d}_keypoints.json"
 
     img = cv2.imread(img_path)
     # img[(img == IDENTITY[0]).all(axis=-1)] = 125
