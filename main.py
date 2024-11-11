@@ -282,6 +282,9 @@ def main(**args):
                 body_model = smplx.create(gender='female', **model_params, **prev_param[i]['result'])
             elif gender == 'male':
                 body_model = smplx.create(gender='male', **model_params, **prev_param[i]['result'])
+            betas = body_model.betas.detach().clone().cuda()
+            del body_model.betas
+            body_model.betas = betas
             body_models.append(body_model.to(device=device))
     else:
         prev_verts = None

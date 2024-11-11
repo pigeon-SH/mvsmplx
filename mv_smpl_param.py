@@ -6,20 +6,20 @@ import pickle
 
 IDENTITY = [np.array([255, 255, 255]), np.array([125, 125, 125])]
 
-# seqs = ["hug/hug01", "talk/talk22", "backhug/backhug02"] # 
-seqs = ["backhug/backhug02"]
+seqs = ["hug/hug01", "talk/talk22", "backhug/backhug02"] # 
 for seq in seqs:
-    src_root = os.path.join("/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/1017_temporal_7view", seq)
+    src_root = os.path.join("/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/1106_temporal_7view_maskfilter", seq)
     # src_root = os.path.join("/home/vclab/8T_SSD1/extractSMPL/MultiviewSMPLifyX/result/0925_temporal_single_maskpred_nokptsmask")
-    dst_root = os.path.join("/home/vclab/8T_SSD1/dataset/Hi4D", seq, "smpl_pred_7view")
+    dst_root = os.path.join("/home/vclab/8T_SSD1/dataset/Hi4D", seq, "smpl_pred_7view_fixbeta")
     frame_names = sorted(os.listdir(src_root))
     frame_names = [frame_name for frame_name in frame_names if os.path.isdir(os.path.join(src_root, frame_name))]
     os.makedirs(dst_root, exist_ok=True)
 
-    for frame_name in frame_names:
+    betas = []
+    for idx, frame_name in enumerate(frame_names):
         dst_path = os.path.join(dst_root, f"{frame_name}.npz")
         dst_param = {}
-        betas = []
+        # betas = []
         global_orients = []
         left_hand_poses = []
         right_hand_poses = []
@@ -34,7 +34,10 @@ for seq in seqs:
             src_params = pickle.load(fp)
         src_params.sort(key = lambda x: x['person_id'])
         for human_idx in range(len(src_params)):
-            betas.append(src_params[human_idx]['result']['betas']) # (1, 300)
+            if idx == 0:
+                betas.append(src_params[human_idx]['result']['betas']) # (1, 300)
+            elif 'betas' in src_params[human_idx]['result'].keys():
+                raise NotImplementedError("Beta is not fixed")
             global_orients.append(src_params[human_idx]['result']['global_orient']) # (1, 3)
             left_hand_poses.append(src_params[human_idx]['result']['left_hand_pose']) # (1, 12)
             right_hand_poses.append(src_params[human_idx]['result']['right_hand_pose']) # (1, 12)

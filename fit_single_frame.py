@@ -316,7 +316,7 @@ def fit_single_frame(img_list,
                 for i in range(len(opt_weights_dict['hand_prior_weight'])):
                     opt_weights_dict['hand_prior_weight'][i] *= (view_num / fct)
 
-            if True: # interpenetration:
+            if interpenetration:
                 opt_weights_dict['coll_loss_weight'] = coll_loss_weights
                 for i in range(len(opt_weights_dict['coll_loss_weight'])):
                     opt_weights_dict['coll_loss_weight'][i] *= (view_num / fct)
